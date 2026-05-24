@@ -1,30 +1,8 @@
 --
--- MoneyMoney Web Banking extension for Presidential Bank
+-- Presidential Bank — MoneyMoney Web Banking Extension
 -- https://www.presidentialpcbanking.com
---
--- MIT License
---
--- LOGIN METHODS:
---
--- 1. NORMAL LOGIN (Username/Password + MFA):
---    - Username: your username
---    - Password: your password
---    - MFA: TOTP, SMS, Call, Email methods supported
---    - LIMITATION: After MFA, the bank creates a new session with HttpOnly
---      cookies (rftoken) that cannot be retrieved by MoneyMoney. Login will
---      fail after successful MFA with an informative error message.
---
--- 2. COOKIE IMPORT MODE (Workaround):
---    - Username: your username
---    - Password: COOKIE: + cookies from browser DevTools
---    - LIMITATION: Cookies may be rejected due to server-side security
---      measures (IP binding, session validation, browser fingerprinting).
---
--- HELPER SCRIPT:
---    python3 extract_presidential_cookies.py www.presidentialpcbanking.com.har
---
--- NOTE: MFA functions are kept for completeness and future use if the
--- HttpOnly cookie limitation is resolved.
+-- Dokumentation: docs/LUA-EXTENSIONS.md
+-- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking {

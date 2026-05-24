@@ -1,6 +1,24 @@
 # MoneyMoney Extensions (US-Banken)
 
-Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Banken ohne Lua-Login (RSA, Bot-Schutz).
+**Wichtig:** Login mit Benutzername und Passwort in MoneyMoney funktioniert bei diesen Banken **nicht**. Stattdessen Session-Cookies aus dem Browser importieren.
+
+MoneyMoney-Extensions laufen in **Lua ohne Browser-Engine**: kein JavaScript, keine clientseitige Kryptografie, kein Bot-Schutz-Fingerprint. US-Banken erwarten genau das beim Login — deshalb scheitert ein direkter Abruf; der Cookie-Import nutzt eine bereits im Browser etablierte Session.
+
+| Bank | Warum kein normaler Login? |
+|------|----------------------------|
+| **Bank of America** | Clientseitige RSA-Verschlüsselung — in MoneyMoney-Lua nicht nachbildbar. |
+| **Fidelity** | Bot-Schutz (Akamai) blockiert programmatische Login-Requests. |
+| **Presidential Bank** | Nach MFA HttpOnly-Cookies (`rftoken`); MoneyMoney übernimmt diese nicht zuverlässig. |
+
+**Workaround — Cookie-Import:** Im Browser einloggen, Cookies exportieren, als **Passwort** in MoneyMoney eintragen (Benutzername unverändert):
+
+```
+COOKIE:name=value;name2=value2
+```
+
+Export-Methoden: Abschnitt [Cookie-Import](#cookie-import) unten.
+
+Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Banken.
 
 ## Extensions
 
@@ -16,9 +34,9 @@ Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Banken ohne
    `~/Library/Containers/com.moneymoney-app.retail/Data/Library/Application Support/MoneyMoney/Extensions/`
 2. MoneyMoney: Signaturprüfung für Extensions deaktivieren, neu starten.
 
-## Cookie-Import
+**Lua-API (Einsprungpunkte):** [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) — gemäß [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/).
 
-Passwort in MoneyMoney: `COOKIE:name=value;name2=value2`
+## Cookie-Import
 
 Session-Cookies sind oft **HttpOnly** — nicht per `document.cookie` lesbar.
 
@@ -67,11 +85,7 @@ npx --yes @kieranhunt/crul --url https://secure.bankofamerica.com --browsers saf
 
 BoA manuell: Network → `account-details.go` → Request Header **Cookie**.
 
-Cookies nach Login zeitnah exportieren. Presidential: MFA in MoneyMoney liefert oft kein `rftoken` — Cookie-Import nötig.
-
-## Hintergrund
-
-MoneyMoney-Lua: kein JavaScript, keine externen Prozesse, kein Session-Import. Workaround: `COOKIE:` im Passwortfeld.
+Cookies nach Login zeitnah exportieren.
 
 ## Lizenz
 
