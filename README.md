@@ -25,7 +25,7 @@ Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Finanzinsti
 
 ## Cookie-Import (BoA, Fidelity, Presidential)
 
-Diese Banken verschlüsseln Login-Daten im Browser (RSA/JavaScript) oder blockieren Bot-Traffic. MoneyMoney kann das nicht nachbilden. Workaround: Session-Cookies aus dem Browser übernehmen.
+Diese Banken verschlüsseln Login-Daten im Browser (RSA/JavaScript) oder blockieren Bot-Traffic. Workaround: Session-Cookies aus dem Browser übernehmen.
 
 **In MoneyMoney:**
 
@@ -34,11 +34,23 @@ Diese Banken verschlüsseln Login-Daten im Browser (RSA/JavaScript) oder blockie
 
 Beispiel: `COOKIE:SMSESSION=eyJ...;SSOTOKEN=eyJ...`
 
+### HttpOnly — was geht wo?
+
+Session-Cookies (BoA `SMSESSION`, Presidential `rftoken`) sind **HttpOnly** — absichtlich unsichtbar für `document.cookie` und die Cookie Store API.
+
+| Methode | HttpOnly | Browser |
+|---------|----------|---------|
+| Userscript + Tampermonkey `GM.cookie` | Ja | Chrome, Firefox, Edge (Einstellung nötig) |
+| Userscript + Tampermonkey `GM.cookie` | **Nein** | Safari ([Tampermonkey #2252](https://github.com/Tampermonkey/tampermonkey/issues/2252)) |
+| HAR + `scripts/extract-*-cookies.py` | Ja | Alle |
+| [Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY) | Ja | Chrome, Firefox |
+| [crul](https://github.com/KieranHunt/crul) (CLI) | Ja | Chrome, Firefox, Safari (Cookie-DB) |
+
 ### Cookies beschaffen
 
-**Variante A — HAR (alle Banken, inkl. HttpOnly)**
+**Variante A — HAR (alle Banken)**
 
-1. Im Browser einloggen, Konto/Portfolio öffnen.
+1. Einloggen, Konto/Portfolio öffnen.
 2. DevTools → Network → HAR exportieren.
 3. Skript ausführen:
 
@@ -50,46 +62,52 @@ Beispiel: `COOKIE:SMSESSION=eyJ...;SSOTOKEN=eyJ...`
 
 4. Ausgabe als Passwort in MoneyMoney einfügen.
 
-**Variante B — Userscript (Chrome/Firefox)**
+**Variante B — Userscript (Chrome/Firefox/Edge)**
 
-Tampermonkey. Erkennt die Bank automatisch. HttpOnly-Cookies (z. B. BoA `SMSESSION`) brauchen `GM.cookie`.
+Tampermonkey mit `GM.cookie` — liest HttpOnly über die Browser-Cookies-API.
 
 1. [Tampermonkey](https://www.tampermonkey.net/) installieren.
-2. `scripts/moneymoney-cookie-exporter.user.js` als Userscript anlegen.
+2. `scripts/moneymoney-cookie-exporter.user.js` anlegen.
 3. Tampermonkey → **Erweitert** → **Sicherheit** → **Cookie-Zugriff: Alle**.
-4. Bei der Bank einloggen. BoA: Kontoübersicht auf **secure.bankofamerica.com** öffnen.
-5. Button **MM** (Alt+C) → **Cookies kopieren** → als Passwort in MoneyMoney einfügen.
+4. Einloggen. BoA: **secure.bankofamerica.com** (Kontoübersicht).
+5. **MM** (Alt+C) → **Cookies kopieren** → in MoneyMoney einfügen.
 
-**Safari:** Tampermonkey kann HttpOnly dort nicht lesen (Safari-Limit). Stattdessen HAR exportieren (Variante A).
+**Safari:** Userscript reicht nicht für HttpOnly → Variante A, C oder D.
 
-Unterstützt: Bank of America, Fidelity, Presidential Bank.
+**Variante C — Cookie-Extension (ohne HAR)**
 
-**Variante C — Manuell (BoA)**
+[Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY) installieren, auf der Bank-Seite JSON exportieren, relevante Cookies als `COOKIE:name=value;…` zusammenstellen. HttpOnly ist enthalten.
 
-DevTools → Network → Request `account-details.go` → Request Headers → **Cookie** (vollständiger Header, nicht nur Application-Tab).
+**Variante D — CLI crul (macOS, inkl. Safari)**
+
+```bash
+npx --yes @kieranhunt/crul --url https://secure.bankofamerica.com --browsers safari --output -
+```
+
+Ausgabe ist Netscape-Format; für MoneyMoney nur `name=value`-Paare mit `COOKIE:`-Prefix kombinieren, oder HAR-Skript als Vorlage nutzen.
+
+**Variante E — Manuell (BoA)**
+
+DevTools → Network → `account-details.go` → Request Headers → **Cookie** (vollständiger Header).
 
 ### Hinweise
 
-- Cookies verfallen schnell (Minuten bis Stunden). Direkt nach Login kopieren.
-- Bei Fehlern: Protokollfenster in MoneyMoney prüfen (**Fenster → Protokollfenster**).
-- Presidential Bank: MFA-Login scheitert oft, weil `rftoken` (HttpOnly) nach MFA nicht an MoneyMoney übergeben wird. Cookie-Import aus HAR ist zuverlässiger.
+- Cookies verfallen schnell. Direkt nach Login exportieren.
+- Protokollfenster bei Fehlern: **Fenster → Protokollfenster**.
+- Presidential Bank: MFA-Login liefert oft kein `rftoken` an MoneyMoney — Cookie-Import aus HAR/Extension zuverlässiger.
 
 ## Warum der Umweg?
 
-MoneyMoney-Extensions laufen in Lua ohne JavaScript und ohne externe Programme. Folgendes fehlt in der App:
+MoneyMoney-Extensions laufen in Lua ohne JavaScript und ohne externe Programme:
 
 | Fehlende Funktion | Auswirkung |
 |-------------------|------------|
-| JavaScript-Ausführung | Login-Flows mit clientseitiger Verschlüsselung (BoA, Fidelity) |
-| Externe Prozesse (OpenSSL/Python) | RSA-Verschlüsselung vor dem Login |
-| HttpOnly-Cookies nach MFA | Presidential Bank: Session nach 2FA unvollständig |
-| Offizieller Cookie-/Session-Import | Workaround über Passwortfeld `COOKIE:…` |
-
-Bis MoneyMoney das unterstützt, bleiben Cookie-Import und HAR-Extraktion der praktikable Weg.
+| JavaScript-Ausführung | Login mit clientseitiger Verschlüsselung (BoA, Fidelity) |
+| Externe Prozesse | RSA-Verschlüsselung |
+| HttpOnly nach MFA | Presidential: Session unvollständig |
+| Offizieller Session-Import | Workaround über Passwortfeld `COOKIE:…` |
 
 ## Entwicklung
-
-Lokale Tests (BoA):
 
 ```bash
 lua test_boa.lua

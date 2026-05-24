@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MoneyMoney Cookie Exporter (US-Banken)
 // @namespace    https://github.com/rosch100/moneymoney-us-extensions
-// @version      1.1
+// @version      1.2
 // @description  Session-Cookies für MoneyMoney — Bank of America, Fidelity, Presidential Bank
 // @author       rosch100
 // @match        https://*.fidelity.com/*
@@ -136,36 +136,13 @@
     });
   }
 
-  async function collectViaCookieStore() {
-    const store = globalThis.cookieStore;
-    if (!store || typeof store.getAll !== 'function') {
-      return { cookies: {}, count: 0 };
-    }
-    try {
-      const list = await store.getAll();
-      const cookies = {};
-      list.forEach(function (item) {
-        if (item && item.name) {
-          cookies[item.name] = item.value;
-        }
-      });
-      return { cookies: cookies, count: list.length };
-    } catch (e) {
-      return { cookies: {}, count: 0 };
-    }
-  }
-
-  function gmQueryKeys(details) {
-    return JSON.stringify(details);
-  }
-
   async function collectCookiesViaGM(bank) {
     const merged = {};
     const seen = new Set();
     const tried = new Set();
 
     async function addFromList(details) {
-      const key = gmQueryKeys(details);
+      const key = JSON.stringify(details);
       if (tried.has(key)) {
         return 0;
       }
@@ -208,7 +185,7 @@
     return { cookies: merged, apiCount: apiCount, uniqueCount: Object.keys(merged).length };
   }
 
-  function buildHints(bank, merged, gm, store) {
+  function buildHints(bank, merged, gm) {
     const hints = [];
     const missing = bank.critical.filter(function (name) { return !merged[name]; });
 
@@ -222,15 +199,18 @@
     }
 
     if (!hasGmCookieApi()) {
-      hints.push('Tampermonkey: @grant GM.cookie muss aktiv sein.');
+      hints.push('Tampermonkey: @grant GM.cookie erforderlich.');
     } else if (gm.uniqueCount === 0 && !isSafari()) {
-      hints.push('Tampermonkey → Erweitert → Sicherheit → «Cookie-Zugriff» auf «Alle».');
+      hints.push('Tampermonkey → Erweitert → Sicherheit → Cookie-Zugriff «Alle».');
     }
 
     if (isSafari()) {
-      hints.push('Safari kann HttpOnly nicht lesen → HAR exportieren, dann <code>extract-boa-cookies.py</code>.');
-    } else if (store.count === 0 && gm.uniqueCount === 0) {
-      hints.push('HttpOnly nicht lesbar → Tampermonkey-Einstellung prüfen oder HAR-Export.');
+      hints.push('Safari: HttpOnly nicht per Userscript.');
+      hints.push('Alternativen: HAR + <code>scripts/extract-*-cookies.py</code>, '
+        + '<a href="https://github.com/kairi003/Get-cookies.txt-LOCALLY" target="_blank" rel="noopener" style="color:#fff">Get cookies.txt LOCALLY</a>, '
+        + 'oder <a href="https://github.com/KieranHunt/crul" target="_blank" rel="noopener" style="color:#fff">crul</a> (CLI).');
+    } else if (gm.uniqueCount === 0) {
+      hints.push('HttpOnly nicht lesbar → Tampermonkey-Einstellung prüfen, HAR, oder Get cookies.txt LOCALLY.');
     }
 
     return hints;
@@ -238,22 +218,18 @@
 
   async function collectAllCookies(bank) {
     const docCookies = parseDocumentCookies();
-    const store = await collectViaCookieStore();
     const gm = await collectCookiesViaGM(bank);
 
-    const merged = Object.assign({}, docCookies, store.cookies, gm.cookies);
+    const merged = Object.assign({}, docCookies, gm.cookies);
     const sources = [];
     if (gm.uniqueCount > 0) {
       sources.push('GM.cookie');
-    }
-    if (store.count > 0) {
-      sources.push('cookieStore');
     }
     if (Object.keys(docCookies).length > 0) {
       sources.push('document.cookie');
     }
     lastSource = sources.length ? sources.join(' + ') : 'keine';
-    lastHints = buildHints(bank, merged, gm, store);
+    lastHints = buildHints(bank, merged, gm);
 
     return merged;
   }
