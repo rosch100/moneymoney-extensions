@@ -1,400 +1,333 @@
 // ==UserScript==
-// @name         Fidelity Cookie Exporter for MoneyMoney - ALL COOKIES
-// @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Export ALL Fidelity session cookies for MoneyMoney - includes all bot-mgmt, session, XSRF tokens
-// @author       You
+// @name         Fidelity Cookie Exporter for MoneyMoney
+// @namespace    https://github.com/rosch100/moneymoney-us-extensions
+// @version      3.0
+// @description  Exportiert Fidelity-Session-Cookies (inkl. HttpOnly) für MoneyMoney
+// @author       rosch100
 // @match        https://*.fidelity.com/*
 // @match        https://fidelity.com/*
-// @match        https://digital.fidelity.com/*
-// @match        https://login.fidelity.com/*
+// @grant        GM.cookie
+// @grant        GM_cookie
 // @grant        GM_setClipboard
-// @grant        GM_notification
-// @grant        GM_addStyle
-// @run-at       document-start
+// @grant        GM.setClipboard
+// @grant        GM.notification
+// @run-at       document-idle
 // ==/UserScript==
 
-(function() {
-    'use strict';
+(function () {
+  'use strict';
 
-    console.log('[Fidelity Cookie Exporter v2.0] Starting on:', window.location.href);
+  const CRITICAL = ['_abck', 'bm_sz', 'ATC', 'ET', 'SESSION_SCTX', 'PIT'];
 
-    // ALL cookies needed - in priority order for MoneyMoney
-    const ALL_COOKIES_PRIORITY = [
-        // BOT MANAGEMENT (Critical for Akamai bypass)
-        '_abck', 'bm_sz', 'bm_s', 'bm_sv', 'bm_so', 'bm_ss', 'bm_mi', 'bm_lso', 'ak_bmsc',
-        // SESSION AUTH (Critical for login state)
-        'ATC', 'ATT', 'ET', 'SESSION_SCTX', 'JSESSIONID',
-        // FIDELITY CORE
-        'FC', 'MC', 'PIT', 'RC', 'SC', 'RtAzC', 'RtEntC',
-        // XSRF/CSRF (Critical for API access)
-        'PORTSUM_XSRF-TOKEN', 'FVL-XSRF-TOKEN', 'ap180806-XSRF-TOKEN',
-        'RB-XSRF-TOKEN', 'URB-XSRF-TOKEN',
-        '_fvl_neo.csrf', 'ap180806_neo.csrf', 'portsum_.csrf',
-        '_ap126216-pwe.csrf', 'RB_felix.csrf', 'URB_neo.csrf',
-        '_brkg.ap122489.equitytradeticket.csrf', '_tradecontainer.csrf',
-        // APP STATUS
-        'AP171348_HEADER_APP_SERVICE_COOKIE',
-        // VISITOR/ANALYTICS (needed for consistency)
-        'cvi', 'analytics_id',
-        // ADOBE (often required by Akamai)
-        'mbox', 'mboxEdgeCluster',
-        'AMCV_EDCF01AC512D2B770A490D4C%40AdobeOrg',
-        'AMCVS_EDCF01AC512D2B770A490D4C%40AdobeOrg',
-        // LOAD BALANCER
-        'AWSALB', 'AWSALBCORS',
-        // CONSENT
-        'OptanonConsent',
-        // DATA MGMT
-        'dmt_g', 'dmt_t', 'dmt_s', 'dmt_a', 'dmt_p', 'dmt_x',
-        // MISC SESSION
-        'npt', 's_sess', 's_pers', 'at_check', '_cs_ex', '_ldvid', '_cs_c', '_dd_s'
-    ];
+  const PRIORITY = [
+    '_abck', 'bm_sz', 'bm_s', 'bm_sv', 'bm_so', 'bm_ss', 'bm_mi', 'bm_lso', 'ak_bmsc',
+    'ATC', 'ATT', 'ET', 'SESSION_SCTX', 'JSESSIONID',
+    'FC', 'MC', 'PIT', 'RC', 'SC', 'RtAzC', 'RtEntC',
+    'PORTSUM_XSRF-TOKEN', 'FVL-XSRF-TOKEN', 'ap180806-XSRF-TOKEN',
+    'RB-XSRF-TOKEN', 'URB-XSRF-TOKEN',
+    '_fvl_neo.csrf', 'ap180806_neo.csrf', 'portsum_.csrf',
+    'AP171348_HEADER_APP_SERVICE_COOKIE',
+    'AWSALB', 'AWSALBCORS',
+  ];
 
-    let panelCreated = false;
+  const ORIGINS = [
+    'https://digital.fidelity.com',
+    'https://login.fidelity.com',
+    'https://www.fidelity.com',
+    'https://ecaap.fidelity.com',
+    'https://fidelity.com',
+  ];
 
-    function getAllCookies() {
-        const cookies = {};
-        const cookieString = document.cookie;
-        if (!cookieString) return cookies;
+  let panelReady = false;
+  let lastSource = 'document.cookie';
 
-        cookieString.split(';').forEach(cookie => {
-            const parts = cookie.trim().split('=');
-            if (parts.length >= 2) {
-                const name = parts[0].trim();
-                const value = parts.slice(1).join('=').trim();
-                if (name) cookies[name] = value;
-            }
-        });
-        return cookies;
+  function parseDocumentCookies() {
+    const cookies = {};
+    if (!document.cookie) {
+      return cookies;
+    }
+    document.cookie.split(';').forEach(function (part) {
+      const idx = part.indexOf('=');
+      if (idx <= 0) {
+        return;
+      }
+      const name = part.slice(0, idx).trim();
+      const value = part.slice(idx + 1).trim();
+      if (name) {
+        cookies[name] = value;
+      }
+    });
+    return cookies;
+  }
+
+  function gmCookieList(details) {
+    return new Promise(function (resolve) {
+      if (typeof GM !== 'undefined' && GM.cookie && typeof GM.cookie.list === 'function') {
+        GM.cookie.list(details).then(resolve).catch(function () { resolve([]); });
+        return;
+      }
+      if (typeof GM_cookie !== 'undefined' && typeof GM_cookie.list === 'function') {
+        GM_cookie.list(details, function (list) { resolve(list || []); });
+        return;
+      }
+      resolve([]);
+    });
+  }
+
+  async function collectCookiesViaGM() {
+    const merged = {};
+    const seen = new Set();
+
+    async function addFromList(details, label) {
+      const list = await gmCookieList(details);
+      list.forEach(function (item) {
+        if (!item || !item.name || seen.has(item.name)) {
+          return;
+        }
+        seen.add(item.name);
+        merged[item.name] = item.value;
+      });
+      return list.length;
     }
 
-    function formatAllCookies(cookies) {
-        const pairs = [];
-        const added = new Set();
-
-        // First: priority order
-        ALL_COOKIES_PRIORITY.forEach(name => {
-            if (cookies[name] && !added.has(name)) {
-                pairs.push(name + '=' + cookies[name]);
-                added.add(name);
-            }
-        });
-
-        // Second: all remaining cookies
-        for (const [name, value] of Object.entries(cookies)) {
-            if (!added.has(name)) {
-                pairs.push(name + '=' + value);
-                added.add(name);
-            }
-        }
-
-        return pairs.join(';');
+    let apiCount = 0;
+    if (typeof GM !== 'undefined' && GM.cookie) {
+      apiCount += await addFromList({ domain: '.fidelity.com' }, 'domain');
+    }
+    for (const origin of ORIGINS) {
+      apiCount += await addFromList({ url: origin + '/' }, origin);
     }
 
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    return { cookies: merged, apiCount: apiCount };
+  }
+
+  async function collectAllCookies() {
+    const docCookies = parseDocumentCookies();
+    const gm = await collectCookiesViaGM();
+
+    if (gm.apiCount > 0) {
+      lastSource = 'GM.cookie + document.cookie';
+      return Object.assign({}, docCookies, gm.cookies);
     }
 
-    function createPanel() {
-        if (panelCreated) return;
+    lastSource = 'document.cookie';
+    return docCookies;
+  }
 
-        const existing = document.getElementById('mm-cookie-panel');
-        if (existing) existing.remove();
+  function formatCookies(cookies) {
+    const pairs = [];
+    const added = new Set();
 
-        const container = document.createElement('div');
-        container.id = 'mm-cookie-panel';
-
-        // Toggle button (always visible)
-        const toggle = document.createElement('button');
-        toggle.id = 'mm-toggle';
-        toggle.innerHTML = '🍪';
-        toggle.title = 'Fidelity Cookie Exporter (Alt+C)';
-
-        // Main panel (initially hidden)
-        const panel = document.createElement('div');
-        panel.id = 'mm-panel';
-        panel.innerHTML = `
-            <div id="mm-header">
-                <span>Fidelity → MoneyMoney</span>
-                <button id="mm-close">✕</button>
-            </div>
-            <div id="mm-status">Checking cookies...</div>
-            <button id="mm-copy-all" class="mm-btn-primary">📋 COPY ALL COOKIES</button>
-            <button id="mm-copy-debug" class="mm-btn-secondary">🔍 Show Debug</button>
-            <div id="mm-debug-area" style="display:none;margin-top:10px;"></div>
-        `;
-
-        container.appendChild(toggle);
-        container.appendChild(panel);
-
-        // Styles
-        const style = document.createElement('style');
-        style.textContent = `
-            #mm-toggle {
-                position: fixed !important;
-                top: 80px !important;
-                right: 20px !important;
-                z-index: 2147483647 !important;
-                width: 50px !important;
-                height: 50px !important;
-                border-radius: 50% !important;
-                background: #4CAF50 !important;
-                color: white !important;
-                border: 3px solid white !important;
-                font-size: 24px !important;
-                cursor: pointer !important;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.4) !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-            }
-            #mm-panel {
-                position: fixed !important;
-                top: 80px !important;
-                right: 20px !important;
-                z-index: 2147483646 !important;
-                width: 320px !important;
-                background: linear-gradient(135deg, #1a5f2a, #0d3d18) !important;
-                border-radius: 12px !important;
-                padding: 16px !important;
-                color: white !important;
-                font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-                font-size: 13px !important;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.3) !important;
-                display: none !important;
-            }
-            #mm-panel.visible { display: block !important; }
-            #mm-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 12px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255,255,255,0.2);
-                font-weight: 600;
-            }
-            #mm-close {
-                background: rgba(255,255,255,0.15);
-                border: none;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 4px;
-                cursor: pointer;
-            }
-            #mm-status {
-                padding: 10px;
-                border-radius: 6px;
-                margin-bottom: 12px;
-                font-size: 12px;
-                background: rgba(0,0,0,0.2);
-            }
-            #mm-status.ok { background: rgba(76,175,80,0.3); border: 1px solid rgba(76,175,80,0.5); }
-            #mm-status.warn { background: rgba(255,152,0,0.3); border: 1px solid rgba(255,152,0,0.5); }
-            #mm-status.error { background: rgba(244,67,54,0.3); border: 1px solid rgba(244,67,54,0.5); }
-            .mm-btn-primary, .mm-btn-secondary {
-                width: 100%;
-                padding: 12px;
-                border-radius: 6px;
-                border: none;
-                cursor: pointer;
-                font-size: 13px;
-                margin-bottom: 8px;
-                font-weight: 600;
-            }
-            .mm-btn-primary {
-                background: #4CAF50 !important;
-                color: white !important;
-            }
-            .mm-btn-secondary {
-                background: rgba(255,255,255,0.15) !important;
-                color: white !important;
-            }
-            .mm-btn-primary:hover, .mm-btn-secondary:hover {
-                opacity: 0.9;
-                transform: translateY(-1px);
-            }
-        `;
-
-        document.head.appendChild(style);
-
-        if (document.body) {
-            document.body.appendChild(container);
-        } else {
-            setTimeout(() => {
-                if (document.body) document.body.appendChild(container);
-            }, 500);
-            return;
-        }
-
-        panelCreated = true;
-
-        // Event handlers
-        const toggleBtn = document.getElementById('mm-toggle');
-        const panelEl = document.getElementById('mm-panel');
-        const closeBtn = document.getElementById('mm-close');
-        const copyBtn = document.getElementById('mm-copy-all');
-        const debugBtn = document.getElementById('mm-copy-debug');
-
-        toggleBtn.onclick = () => {
-            panelEl.classList.toggle('visible');
-            toggleBtn.style.display = panelEl.classList.contains('visible') ? 'none' : 'flex';
-            updateStatus();
-        };
-
-        closeBtn.onclick = () => {
-            panelEl.classList.remove('visible');
-            toggleBtn.style.display = 'flex';
-        };
-
-        copyBtn.onclick = () => copyAllCookies();
-        debugBtn.onclick = () => toggleDebug();
-
-        updateStatus();
-    }
-
-    function updateStatus() {
-        const statusEl = document.getElementById('mm-status');
-        if (!statusEl) return;
-
-        const cookies = getAllCookies();
-        const cookieCount = Object.keys(cookies).length;
-
-        // Check critical cookies
-        const hasBot = !!(cookies['_abck'] || cookies['bm_sz']);
-        const hasSession = !!(cookies['ATC'] || cookies['ET'] || cookies['SESSION_SCTX']);
-        const hasXSRF = !!(cookies['PORTSUM_XSRF-TOKEN'] || cookies['FVL-XSRF-TOKEN']);
-
-        if (hasBot && hasSession && hasXSRF) {
-            statusEl.className = 'ok';
-            statusEl.innerHTML = `✓ <strong>Session active!</strong><br>${cookieCount} cookies ready`;
-        } else if (hasBot || hasSession) {
-            statusEl.className = 'warn';
-            let missing = [];
-            if (!hasBot) missing.push('bot cookies');
-            if (!hasSession) missing.push('session');
-            if (!hasXSRF) missing.push('XSRF tokens');
-            statusEl.innerHTML = `⚠ <strong>Partial session</strong><br>Missing: ${missing.join(', ')}`;
-        } else {
-            statusEl.className = 'error';
-            statusEl.innerHTML = `✗ <strong>Not logged in</strong><br>Login to Fidelity first!`;
-        }
-    }
-
-    function copyAllCookies() {
-        const cookies = getAllCookies();
-        const formatted = formatAllCookies(cookies);
-        const output = 'COOKIE:' + formatted;
-
-        console.log('[Fidelity Exporter] Copying', Object.keys(cookies).length, 'cookies');
-
-        // Copy
-        const ta = document.createElement('textarea');
-        ta.value = output;
-        ta.style.cssText = 'position:fixed;left:-9999px;';
-        document.body.appendChild(ta);
-        ta.select();
-        ta.setSelectionRange(0, 999999);
-
-        let copied = false;
-        try {
-            copied = document.execCommand('copy');
-        } catch (e) {
-            console.error('Copy failed:', e);
-        }
-        document.body.removeChild(ta);
-
-        if (typeof GM_setClipboard !== 'undefined') {
-            try { GM_setClipboard(output); copied = true; } catch(e) {}
-        }
-
-        const statusEl = document.getElementById('mm-status');
-        if (copied) {
-            statusEl.className = 'ok';
-            statusEl.innerHTML = `✓ <strong>${Object.keys(cookies).length} cookies copied!</strong><br>Paste as password in MoneyMoney NOW!`;
-
-            if (typeof GM_notification !== 'undefined') {
-                GM_notification({
-                    title: 'Fidelity Cookie Exporter',
-                    text: `${Object.keys(cookies).length} cookies copied! Use immediately.`,
-                    timeout: 5000
-                });
-            }
-
-            // Flash button
-            const btn = document.getElementById('mm-copy-all');
-            const orig = btn.innerHTML;
-            btn.innerHTML = '✓ COPIED!';
-            btn.style.background = '#2196F3';
-            setTimeout(() => {
-                btn.innerHTML = orig;
-                btn.style.background = '#4CAF50';
-            }, 2000);
-
-            alert(`✅ ${Object.keys(cookies).length} cookies copied!\n\nIMPORTANT: Use IMMEDIATELY in MoneyMoney!\n\n1. Open MoneyMoney NOW\n2. Edit Fidelity account\n3. Paste as PASSWORD\n4. Click OK\n\n(Cookies expire quickly!)`);
-        } else {
-            alert('⚠️ Copy failed. Please manually copy from debug view.');
-        }
-    }
-
-    function toggleDebug() {
-        const debugArea = document.getElementById('mm-debug-area');
-        if (!debugArea) return;
-
-        if (debugArea.style.display === 'none') {
-            const cookies = getAllCookies();
-            const formatted = formatAllCookies(cookies);
-            debugArea.innerHTML = `
-                <textarea style="width:100%;height:150px;font-size:10px;font-family:monospace;" onclick="this.select()">${escapeHtml('COOKIE:' + formatted)}</textarea>
-                <div style="margin-top:8px;font-size:11px;">
-                    <strong>Critical cookies:</strong><br>
-                    _abck: ${cookies['_abck'] ? '✓' : '✗'} |
-                    bm_sz: ${cookies['bm_sz'] ? '✓' : '✗'} |
-                    ATC: ${cookies['ATC'] ? '✓' : '✗'} |
-                    ET: ${cookies['ET'] ? '✓' : '✗'} |
-                    SESSION_SCTX: ${cookies['SESSION_SCTX'] ? '✓' : '✗'} |
-                    PIT: ${cookies['PIT'] ? '✓' : '✗'} |
-                    XSRF: ${cookies['PORTSUM_XSRF-TOKEN'] ? '✓' : '✗'}
-                </div>
-            `;
-            debugArea.style.display = 'block';
-        } else {
-            debugArea.style.display = 'none';
-        }
-    }
-
-    // Initialize
-    function init() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', createPanel);
-        } else {
-            createPanel();
-        }
-    }
-
-    init();
-
-    // Re-create on SPA navigation
-    let lastUrl = location.href;
-    setInterval(() => {
-        if (location.href !== lastUrl) {
-            lastUrl = location.href;
-            panelCreated = false;
-            setTimeout(createPanel, 500);
-        }
-    }, 1000);
-
-    // Keyboard shortcut
-    document.addEventListener('keydown', (e) => {
-        if (e.altKey && e.key === 'c') {
-            e.preventDefault();
-            const toggle = document.getElementById('mm-toggle');
-            if (toggle) toggle.click();
-        }
+    PRIORITY.forEach(function (name) {
+      if (cookies[name] && !added.has(name)) {
+        pairs.push(name + '=' + cookies[name]);
+        added.add(name);
+      }
     });
 
-    console.log('[Fidelity Exporter v2.0] Ready. Press Alt+C or click 🍪 button.');
+    Object.keys(cookies).sort().forEach(function (name) {
+      if (!added.has(name)) {
+        pairs.push(name + '=' + cookies[name]);
+        added.add(name);
+      }
+    });
+
+    return pairs.join(';');
+  }
+
+  function missingCritical(cookies) {
+    return CRITICAL.filter(function (name) { return !cookies[name]; });
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) { /* next */ }
+    }
+
+    if (typeof GM !== 'undefined' && GM.setClipboard) {
+      try {
+        GM.setClipboard(text);
+        return true;
+      } catch (e) { /* next */ }
+    }
+
+    if (typeof GM_setClipboard !== 'undefined') {
+      try {
+        GM_setClipboard(text);
+        return true;
+      } catch (e) { /* next */ }
+    }
+
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function notify(title, text) {
+    if (typeof GM !== 'undefined' && GM.notification) {
+      GM.notification({ title: title, text: text, timeout: 4000 });
+      return;
+    }
+    if (typeof GM_notification !== 'undefined') {
+      GM_notification({ title: title, text: text, timeout: 4000 });
+    }
+  }
+
+  function setStatus(html, level) {
+    const el = document.getElementById('mm-status');
+    if (!el) {
+      return;
+    }
+    el.className = level || '';
+    el.innerHTML = html;
+  }
+
+  async function refreshStatus() {
+    const cookies = await collectAllCookies();
+    const count = Object.keys(cookies).length;
+    const missing = missingCritical(cookies);
+    const httpOnlyHint = lastSource === 'document.cookie'
+      ? '<br><small>HttpOnly fehlt — Tampermonkey mit GM.cookie nutzen oder HAR-Export.</small>'
+      : '<br><small>Quelle: ' + lastSource + '</small>';
+
+    if (count === 0) {
+      setStatus('Nicht eingeloggt.', 'error');
+      return cookies;
+    }
+
+    if (missing.length === 0) {
+      setStatus('<strong>Bereit</strong> — ' + count + ' Cookies' + httpOnlyHint, 'ok');
+    } else {
+      setStatus(
+        '<strong>Unvollständig</strong> — fehlt: ' + missing.join(', ') + httpOnlyHint,
+        'warn'
+      );
+    }
+    return cookies;
+  }
+
+  async function exportCookies() {
+    const cookies = await collectAllCookies();
+    const output = 'COOKIE:' + formatCookies(cookies);
+    const copied = await copyText(output);
+    const count = Object.keys(cookies).length;
+    const debug = document.getElementById('mm-debug');
+    const copyBtn = document.getElementById('mm-copy');
+
+    if (debug) {
+      debug.value = output;
+      debug.style.display = 'block';
+    }
+
+    if (copied) {
+      setStatus('<strong>Kopiert</strong> — ' + count + ' Cookies. Sofort in MoneyMoney einfügen.', 'ok');
+      notify('Fidelity → MoneyMoney', count + ' Cookies kopiert.');
+      if (copyBtn) {
+        copyBtn.textContent = 'Kopiert';
+        setTimeout(function () { copyBtn.textContent = 'Cookies kopieren'; }, 2000);
+      }
+    } else {
+      setStatus('Kopieren fehlgeschlagen — Text unten manuell markieren.', 'warn');
+    }
+  }
+
+  function createPanel() {
+    if (panelReady || document.getElementById('mm-cookie-panel')) {
+      return;
+    }
+
+    const root = document.createElement('div');
+    root.id = 'mm-cookie-panel';
+    root.innerHTML =
+      '<button id="mm-toggle" title="Cookie-Export (Alt+C)">MM</button>' +
+      '<div id="mm-panel">' +
+      '  <div id="mm-header"><span>Fidelity → MoneyMoney</span><button id="mm-close" type="button">×</button></div>' +
+      '  <div id="mm-status">Lade…</div>' +
+      '  <button id="mm-copy" type="button">Cookies kopieren</button>' +
+      '  <textarea id="mm-debug" readonly spellcheck="false"></textarea>' +
+      '</div>';
+
+    const style = document.createElement('style');
+    style.textContent =
+      '#mm-cookie-panel{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px}' +
+      '#mm-toggle{position:fixed;top:72px;right:16px;z-index:2147483647;width:44px;height:44px;border-radius:8px;' +
+      'border:1px solid #ccc;background:#1a5f2a;color:#fff;font-weight:600;cursor:pointer}' +
+      '#mm-panel{position:fixed;top:72px;right:16px;z-index:2147483646;display:none;width:300px;padding:12px;' +
+      'border-radius:8px;background:#1a5f2a;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.35)}' +
+      '#mm-panel.open{display:block}#mm-toggle.hidden{display:none}' +
+      '#mm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600}' +
+      '#mm-close{background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer}' +
+      '#mm-status{padding:8px;border-radius:4px;margin-bottom:8px;background:rgba(0,0,0,.2);font-size:12px;line-height:1.4}' +
+      '#mm-status.ok{background:rgba(76,175,80,.35)}#mm-status.warn{background:rgba(255,152,0,.35)}' +
+      '#mm-status.error{background:rgba(244,67,54,.35)}' +
+      '#mm-copy{width:100%;padding:10px;border:none;border-radius:4px;background:#4caf50;color:#fff;font-weight:600;cursor:pointer}' +
+      '#mm-debug{display:none;width:100%;height:120px;margin-top:8px;font:11px/1.3 monospace;resize:vertical}';
+
+    document.head.appendChild(style);
+    document.body.appendChild(root);
+    panelReady = true;
+
+    const panel = document.getElementById('mm-panel');
+    const toggle = document.getElementById('mm-toggle');
+
+    document.getElementById('mm-close').onclick = function () {
+      panel.classList.remove('open');
+      toggle.classList.remove('hidden');
+    };
+
+    toggle.onclick = function () {
+      panel.classList.add('open');
+      toggle.classList.add('hidden');
+      refreshStatus();
+    };
+
+    document.getElementById('mm-copy').onclick = exportCookies;
+
+    refreshStatus();
+  }
+
+  function init() {
+    if (document.body) {
+      createPanel();
+    } else {
+      document.addEventListener('DOMContentLoaded', createPanel, { once: true });
+    }
+  }
+
+  init();
+
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      const toggle = document.getElementById('mm-toggle');
+      if (toggle) {
+        toggle.click();
+      }
+    }
+  });
+
+  let lastUrl = location.href;
+  setInterval(function () {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      panelReady = false;
+      const old = document.getElementById('mm-cookie-panel');
+      if (old) {
+        old.remove();
+      }
+      setTimeout(init, 300);
+    }
+  }, 1000);
 })();
