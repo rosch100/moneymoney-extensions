@@ -1,31 +1,8 @@
 --
--- MoneyMoney Web Banking extension for Bank of America
+-- Bank of America — MoneyMoney Web Banking Extension
 -- https://www.bankofamerica.com
---
--- MIT License
---
--- COOKIE IMPORT MODE (Workaround for RSA encryption):
---   Bank of America uses client-side RSA encryption for login that cannot
---   be replicated in Lua. Use Cookie Import Mode as a workaround:
---
---   1. Login to Bank of America in your browser (Safari/Chrome)
---   2. Open DevTools (F12) → Application/Storage → Cookies
---   3. Copy ALL cookies for secure.bankofamerica.com (especially critical ones):
---      Best: DevTools → Network → any account-details.go request → Request Headers → Cookie (full string)
---      - SMSESSION (JWT session token - MOST IMPORTANT)
---      - SSOTOKEN, LSESSIONID, GSID, CSID, MMID, cdSNum, ctd
---      - Akamai/session helpers: bm_sv, bm_sz, bmuid, ak_bmsc, TS017f5af8, TS0156185e
---   4. In MoneyMoney, enter your username normally
---   5. For password, enter: COOKIE: followed by semicolon-separated cookies
---      Example: COOKIE:SMSESSION=eyJ...;SSOTOKEN=eyJ...;LSESSIONID=eyJ...;GSID=...
---
---   The extension will use these cookies to access your account directly,
---   bypassing the RSA-encrypted login flow.
---
--- ARCHITECTURE NOTES:
---   Bank of America uses server-side rendering, not JSON APIs.
---   Account data is embedded in HTML responses.
---   Main endpoint: /myaccounts/
+-- Dokumentation: docs/LUA-EXTENSIONS.md
+-- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking {
