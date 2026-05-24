@@ -1,0 +1,31 @@
+/luarocks
+/lua
+/lua_modules
+/.luarocks
+/.vscode
+/~/Library
+/Presidential/
+*.har
+*_cookies.txt
+fidelity_cookies.txt
+lua_modules/
+/*.lua
+!/extensions/*.lua
+
+RSACrypto.lua
+boa-encrypt.py
+boa-encrypt.sh
+test_boa.lua
+moneymoney-dev-1.rockspec
+
+# Alte/duplizierte Dateien (nicht im Repo)
+Bank of America liest Daten.lua
+Fidelity Cookie.lua
+Presidential Bank 2FA*.lua
+fidelity-cookie-exporter-*.user.js
+fidelity-exporter-*.user.js
+extract_*.py
+MoneyMoney-Feature-Request*.md
+Presidential-Bank-*.md
+BOOKMARKLET.md
+FIDELITY_COOKIE_EXPORTER.md

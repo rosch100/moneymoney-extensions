@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Fidelity-Cookies aus HAR für MoneyMoney. Usage: python3 extract-fidelity-cookies.py datei.har"""
+
+import json
+import subprocess
+import sys
+
+
+PRIORITY = [
+    "_abck", "bm_sz", "bm_s", "bm_sv", "bm_so", "bm_ss", "bm_mi", "bm_lso", "ak_bmsc",
+    "ATC", "ATT", "ET", "SESSION_SCTX", "JSESSIONID",
+    "FC", "MC", "PIT", "RC", "SC",
+    "PORTSUM_XSRF-TOKEN", "FVL-XSRF-TOKEN",
+]
+
+
+def parse_cookie_header(value):
+    cookies = {}
+    for pair in value.split(";"):
+        pair = pair.strip()
+        if "=" in pair:
+            name, val = pair.split("=", 1)
+            cookies[name.strip()] = val.strip()
+    return cookies
+
+
+def parse_set_cookie(value):
+    first = value.split(";")[0].strip()
+    if "=" not in first:
+        return {}
+    name, val = first.split("=", 1)
+    return {name.strip(): val.strip()}
+
+
+def collect_cookies(har_path):
+    with open(har_path, encoding="utf-8") as f:
+        entries = json.load(f)["log"]["entries"]
+
+    cookies = {}
+    for entry in entries:
+        for header in entry.get("request", {}).get("headers", []):
+            if header.get("name", "").lower() == "cookie":
+                cookies.update(parse_cookie_header(header.get("value", "")))
+        for header in entry.get("response", {}).get("headers", []):
+            if header.get("name", "").lower() == "set-cookie":
+                cookies.update(parse_set_cookie(header.get("value", "")))
+        for item in entry.get("request", {}).get("cookies", []):
+            cookies[item["name"]] = item["value"]
+    return cookies
+
+
+def format_cookies(cookies):
+    ordered = []
+    used = set()
+    for name in PRIORITY:
+        if name in cookies:
+            ordered.append(f"{name}={cookies[name]}")
+            used.add(name)
+    for name in sorted(cookies):
+        if name not in used:
+            ordered.append(f"{name}={cookies[name]}")
+    return "COOKIE:" + ";".join(ordered)
+
+
+def main(har_path):
+    cookies = collect_cookies(har_path)
+    if not cookies:
+        print("Keine Cookies in der HAR-Datei.", file=sys.stderr)
+        sys.exit(1)
+
+    result = format_cookies(cookies)
+    print(result)
+
+    try:
+        subprocess.run(["pbcopy"], input=result, text=True, check=True)
+        print("In Zwischenablage kopiert.", file=sys.stderr)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <har>", file=sys.stderr)
+        sys.exit(1)
+    main(sys.argv[1])
