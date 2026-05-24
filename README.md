@@ -34,17 +34,57 @@ Diese Banken verschlüsseln Login-Daten im Browser (RSA/JavaScript) oder blockie
 
 Beispiel: `COOKIE:SMSESSION=eyJ...;SSOTOKEN=eyJ...`
 
-### HttpOnly — was geht wo?
+### Userscript: Browser und Erweiterungen
 
-Session-Cookies (BoA `SMSESSION`, Presidential `rftoken`) sind **HttpOnly** — absichtlich unsichtbar für `document.cookie` und die Cookie Store API.
+Das Skript `scripts/moneymoney-cookie-exporter.user.js` läuft **nur mit [Tampermonkey](https://www.tampermonkey.net/)**. Andere Userscript-Manager (**Violentmonkey**, **Greasemonkey**, Safari **Userscripts**) unterstützen `GM.cookie` nicht — damit fehlen HttpOnly-Session-Cookies.
+
+| Browser | Erweiterung | HttpOnly (BoA/Fidelity/Presidential) | Voraussetzung |
+|---------|-------------|--------------------------------------|---------------|
+| **Google Chrome** | [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) | Ja | Cookie-Zugriff: **Alle** (siehe unten) |
+| **Microsoft Edge** | [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) | Ja | Cookie-Zugriff: **Alle** |
+| **Mozilla Firefox** | [Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/) | Ja (meist) | Cookie-Zugriff: **Alle**; bei Problemen Tampermonkey-Beta testen |
+| **Safari (macOS)** | [Tampermonkey](https://apps.apple.com/app/tampermonkey/id1482490089) | **Nein** | Safari blockiert HttpOnly-Zugriff — Userscript nur für sichtbare Cookies nutzlos ([Details](https://github.com/Tampermonkey/tampermonkey/issues/2252)) |
+
+**Tampermonkey-Einstellung (Chrome/Firefox/Edge, Pflicht für Session-Cookies):**
+
+1. Tampermonkey-Dashboard öffnen
+2. **Einstellungen** → Konfigurationsmodus: **Erweitert**
+3. **Sicherheit** → **Cookie-Zugriff für Skripte: Alle** (nicht „Nur sichtbare“)
+
+Ohne diese Einstellung liefert das Skript nur `document.cookie` — bei BoA fehlen dann `SMSESSION`, `SSOTOKEN` usw.
+
+#### So verwenden (Chrome, Firefox, Edge)
+
+1. Tampermonkey installieren
+2. Neues Skript → Inhalt von `scripts/moneymoney-cookie-exporter.user.js` einfügen → speichern
+3. Cookie-Zugriff auf **Alle** stellen (s.o.)
+4. Bei der Bank einloggen und die richtige Seite öffnen:
+   - **BoA:** `secure.bankofamerica.com` (Kontoübersicht, z. B. `account-details.go`)
+   - **Fidelity:** `digital.fidelity.com` (Portfolio)
+   - **Presidential:** `www.presidentialpcbanking.com` (Dashboard nach Login)
+5. Button **MM** oben rechts (oder **Alt+C**) → **Cookies kopieren**
+6. In MoneyMoney als **Passwort** einfügen (`COOKIE:…` ist bereits im Export enthalten)
+
+Das Skript erkennt die Bank automatisch anhand der URL.
+
+#### Safari
+
+Tampermonkey installierbar, aber **kein HttpOnly** → Session-Export schlägt fehl. Statt Userscript:
+
+- **Variante A** (HAR + Python-Skripte) — empfohlen
+- **Variante D** ([crul](https://github.com/KieranHunt/crul) CLI, liest Safari-Cookie-DB)
+
+### HttpOnly — alle Methoden im Vergleich
+
+Session-Cookies (BoA `SMSESSION`, Presidential `rftoken`) sind **HttpOnly** — unsichtbar für `document.cookie`.
 
 | Methode | HttpOnly | Browser |
 |---------|----------|---------|
-| Userscript + Tampermonkey `GM.cookie` | Ja | Chrome, Firefox, Edge (Einstellung nötig) |
-| Userscript + Tampermonkey `GM.cookie` | **Nein** | Safari ([Tampermonkey #2252](https://github.com/Tampermonkey/tampermonkey/issues/2252)) |
+| Userscript + Tampermonkey `GM.cookie` | Ja | Chrome, Firefox, Edge |
+| Userscript + Tampermonkey `GM.cookie` | Nein | Safari |
 | HAR + `scripts/extract-*-cookies.py` | Ja | Alle |
 | [Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY) | Ja | Chrome, Firefox |
-| [crul](https://github.com/KieranHunt/crul) (CLI) | Ja | Chrome, Firefox, Safari (Cookie-DB) |
+| [crul](https://github.com/KieranHunt/crul) (CLI) | Ja | Chrome, Firefox, Safari |
 
 ### Cookies beschaffen
 
@@ -62,17 +102,9 @@ Session-Cookies (BoA `SMSESSION`, Presidential `rftoken`) sind **HttpOnly** — 
 
 4. Ausgabe als Passwort in MoneyMoney einfügen.
 
-**Variante B — Userscript (Chrome/Firefox/Edge)**
+**Variante B — Userscript**
 
-Tampermonkey mit `GM.cookie` — liest HttpOnly über die Browser-Cookies-API.
-
-1. [Tampermonkey](https://www.tampermonkey.net/) installieren.
-2. `scripts/moneymoney-cookie-exporter.user.js` anlegen.
-3. Tampermonkey → **Erweitert** → **Sicherheit** → **Cookie-Zugriff: Alle**.
-4. Einloggen. BoA: **secure.bankofamerica.com** (Kontoübersicht).
-5. **MM** (Alt+C) → **Cookies kopieren** → in MoneyMoney einfügen.
-
-**Safari:** Userscript reicht nicht für HttpOnly → Variante A, C oder D.
+Siehe Abschnitt [Userscript: Browser und Erweiterungen](#userscript-browser-und-erweiterungen) oben.
 
 **Variante C — Cookie-Extension (ohne HAR)**
 
