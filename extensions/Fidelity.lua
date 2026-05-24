@@ -1,21 +1,8 @@
 --
--- MoneyMoney Web Banking extension for Fidelity Investments
+-- Fidelity Investments — MoneyMoney Web Banking Extension
 -- https://www.fidelity.com
---
--- MIT License
---
--- Based on HAR analysis: digital.fidelity.com.har
--- Uses GraphQL API for positions
---
--- COOKIE IMPORT MODE:
---   1. Login to Fidelity in your browser
---   2. Open DevTools → Application/Storage → Cookies
---   3. Copy all cookies for digital.fidelity.com
---   4. In MoneyMoney, username = your username
---   5. Password = COOKIE: followed by cookies (semicolon-separated)
---      Example: COOKIE:_abck=xxx;bm_sz=yyy;ATC=zzz;ET=aaa
---
--- CLEANUP: Removed debug statements, consolidated headers
+-- Dokumentation: docs/LUA-EXTENSIONS.md
+-- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking {
