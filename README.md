@@ -9,7 +9,6 @@ Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Banken ohne
 | `extensions/Bank of America.lua` | Bank of America | Cookie-Import |
 | `extensions/Fidelity.lua` | Fidelity | Cookie-Import |
 | `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
-| `extensions/Fidelity NetBenefits.lua` | Fidelity NetBenefits | Login (experimentell) |
 
 ## Installation
 
