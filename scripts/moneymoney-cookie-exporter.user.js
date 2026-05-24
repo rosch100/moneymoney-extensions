@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MoneyMoney Cookie Exporter (US-Banken)
 // @namespace    https://github.com/rosch100/moneymoney-us-extensions
-// @version      1.0
+// @version      1.1
 // @description  Session-Cookies für MoneyMoney — Bank of America, Fidelity, Presidential Bank
 // @author       rosch100
 // @match        https://*.fidelity.com/*
@@ -46,6 +46,8 @@
       label: 'Bank of America',
       match: /bankofamerica\.com$/i,
       cookieDomain: '.bankofamerica.com',
+      sessionHost: 'secure.bankofamerica.com',
+      sessionPath: '/myaccounts/details/card/account-details.go',
       origins: [
         'https://secure.bankofamerica.com',
         'https://www.bankofamerica.com',
@@ -72,7 +74,18 @@
   };
 
   let panelReady = false;
-  let lastSource = 'document.cookie';
+  let lastSource = 'keine';
+  let lastHints = [];
+
+  function isSafari() {
+    const ua = navigator.userAgent;
+    return ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Chromium');
+  }
+
+  function hasGmCookieApi() {
+    return (typeof GM !== 'undefined' && GM.cookie && typeof GM.cookie.list === 'function')
+      || (typeof GM_cookie !== 'undefined' && typeof GM_cookie.list === 'function');
+  }
 
   function detectBank() {
     const host = location.hostname.replace(/^www\./, '');
@@ -110,18 +123,54 @@
         return;
       }
       if (typeof GM_cookie !== 'undefined' && typeof GM_cookie.list === 'function') {
-        GM_cookie.list(details, function (list) { resolve(list || []); });
+        GM_cookie.list(details, function (list, error) {
+          if (error) {
+            resolve([]);
+            return;
+          }
+          resolve(list || []);
+        });
         return;
       }
       resolve([]);
     });
   }
 
+  async function collectViaCookieStore() {
+    const store = globalThis.cookieStore;
+    if (!store || typeof store.getAll !== 'function') {
+      return { cookies: {}, count: 0 };
+    }
+    try {
+      const list = await store.getAll();
+      const cookies = {};
+      list.forEach(function (item) {
+        if (item && item.name) {
+          cookies[item.name] = item.value;
+        }
+      });
+      return { cookies: cookies, count: list.length };
+    } catch (e) {
+      return { cookies: {}, count: 0 };
+    }
+  }
+
+  function gmQueryKeys(details) {
+    return JSON.stringify(details);
+  }
+
   async function collectCookiesViaGM(bank) {
     const merged = {};
     const seen = new Set();
+    const tried = new Set();
 
     async function addFromList(details) {
+      const key = gmQueryKeys(details);
+      if (tried.has(key)) {
+        return 0;
+      }
+      tried.add(key);
+
       const list = await gmCookieList(details);
       list.forEach(function (item) {
         if (!item || !item.name || seen.has(item.name)) {
@@ -134,27 +183,79 @@
     }
 
     let apiCount = 0;
-    if (typeof GM !== 'undefined' && GM.cookie && bank.cookieDomain) {
-      apiCount += await addFromList({ domain: bank.cookieDomain });
-    }
-    for (const origin of bank.origins) {
-      apiCount += await addFromList({ url: origin + '/' });
+    const queries = [];
+
+    if (bank.cookieDomain) {
+      queries.push({ domain: bank.cookieDomain });
+      queries.push({ domain: bank.cookieDomain.replace(/^\./, '') });
     }
 
-    return { cookies: merged, apiCount: apiCount };
+    bank.origins.forEach(function (origin) {
+      queries.push({ url: origin + '/' });
+      queries.push({ url: origin + '/', partitionKey: {} });
+    });
+
+    if (location.href.startsWith('http')) {
+      queries.push({ url: location.href });
+      queries.push({ url: location.origin + '/' });
+      queries.push({ url: location.href, partitionKey: {} });
+    }
+
+    for (const query of queries) {
+      apiCount += await addFromList(query);
+    }
+
+    return { cookies: merged, apiCount: apiCount, uniqueCount: Object.keys(merged).length };
+  }
+
+  function buildHints(bank, merged, gm, store) {
+    const hints = [];
+    const missing = bank.critical.filter(function (name) { return !merged[name]; });
+
+    if (missing.length === 0) {
+      return hints;
+    }
+
+    if (bank.sessionHost && location.hostname !== bank.sessionHost) {
+      hints.push('Konto auf <a href="https://' + bank.sessionHost + bank.sessionPath + '" target="_self" style="color:#fff">'
+        + bank.sessionHost + '</a> öffnen.');
+    }
+
+    if (!hasGmCookieApi()) {
+      hints.push('Tampermonkey: @grant GM.cookie muss aktiv sein.');
+    } else if (gm.uniqueCount === 0 && !isSafari()) {
+      hints.push('Tampermonkey → Erweitert → Sicherheit → «Cookie-Zugriff» auf «Alle».');
+    }
+
+    if (isSafari()) {
+      hints.push('Safari kann HttpOnly nicht lesen → HAR exportieren, dann <code>extract-boa-cookies.py</code>.');
+    } else if (store.count === 0 && gm.uniqueCount === 0) {
+      hints.push('HttpOnly nicht lesbar → Tampermonkey-Einstellung prüfen oder HAR-Export.');
+    }
+
+    return hints;
   }
 
   async function collectAllCookies(bank) {
     const docCookies = parseDocumentCookies();
+    const store = await collectViaCookieStore();
     const gm = await collectCookiesViaGM(bank);
 
-    if (gm.apiCount > 0) {
-      lastSource = 'GM.cookie + document.cookie';
-      return Object.assign({}, docCookies, gm.cookies);
+    const merged = Object.assign({}, docCookies, store.cookies, gm.cookies);
+    const sources = [];
+    if (gm.uniqueCount > 0) {
+      sources.push('GM.cookie');
     }
+    if (store.count > 0) {
+      sources.push('cookieStore');
+    }
+    if (Object.keys(docCookies).length > 0) {
+      sources.push('document.cookie');
+    }
+    lastSource = sources.length ? sources.join(' + ') : 'keine';
+    lastHints = buildHints(bank, merged, gm, store);
 
-    lastSource = 'document.cookie';
-    return docCookies;
+    return merged;
   }
 
   function formatCookies(cookies, bank) {
@@ -237,24 +338,29 @@
     el.innerHTML = html;
   }
 
+  function hintHtml() {
+    if (!lastHints.length) {
+      return '<br><small>Quelle: ' + lastSource + '</small>';
+    }
+    return '<br><small>' + lastHints.join('<br>') + '</small>';
+  }
+
   async function refreshStatus(bank) {
     const cookies = await collectAllCookies(bank);
     const count = Object.keys(cookies).length;
     const missing = missingCritical(cookies, bank);
-    const httpOnlyHint = lastSource === 'document.cookie'
-      ? '<br><small>HttpOnly fehlt — Tampermonkey mit GM.cookie oder HAR-Export.</small>'
-      : '<br><small>Quelle: ' + lastSource + '</small>';
+    const hints = hintHtml();
 
     if (count === 0) {
-      setStatus('Nicht eingeloggt.', 'error');
+      setStatus('Nicht eingeloggt.' + hints, 'error');
       return cookies;
     }
 
     if (missing.length === 0) {
-      setStatus('<strong>Bereit</strong> — ' + count + ' Cookies' + httpOnlyHint, 'ok');
+      setStatus('<strong>Bereit</strong> — ' + count + ' Cookies' + hints, 'ok');
     } else {
       setStatus(
-        '<strong>Unvollständig</strong> — fehlt: ' + missing.join(', ') + httpOnlyHint,
+        '<strong>Unvollständig</strong> — fehlt: ' + missing.join(', ') + hints,
         'warn'
       );
     }
@@ -263,6 +369,7 @@
 
   async function exportCookies(bank) {
     const cookies = await collectAllCookies(bank);
+    const missing = missingCritical(cookies, bank);
     const output = 'COOKIE:' + formatCookies(cookies, bank);
     const copied = await copyText(output);
     const count = Object.keys(cookies).length;
@@ -272,6 +379,14 @@
     if (debug) {
       debug.value = output;
       debug.style.display = 'block';
+    }
+
+    if (missing.length > 0) {
+      setStatus(
+        '<strong>Unvollständig</strong> — fehlt: ' + missing.join(', ') + hintHtml(),
+        'warn'
+      );
+      return;
     }
 
     if (copied) {
@@ -307,12 +422,13 @@
       '#mm-cookie-panel{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:13px}' +
       '#mm-toggle{position:fixed;top:72px;right:16px;z-index:2147483647;width:44px;height:44px;border-radius:8px;' +
       'border:1px solid #ccc;background:#1a5f2a;color:#fff;font-weight:600;cursor:pointer}' +
-      '#mm-panel{position:fixed;top:72px;right:16px;z-index:2147483646;display:none;width:300px;padding:12px;' +
+      '#mm-panel{position:fixed;top:72px;right:16px;z-index:2147483646;display:none;width:320px;padding:12px;' +
       'border-radius:8px;background:#1a5f2a;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.35)}' +
       '#mm-panel.open{display:block}#mm-toggle.hidden{display:none}' +
       '#mm-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:600}' +
       '#mm-close{background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer}' +
       '#mm-status{padding:8px;border-radius:4px;margin-bottom:8px;background:rgba(0,0,0,.2);font-size:12px;line-height:1.4}' +
+      '#mm-status a{color:#fff;text-decoration:underline}' +
       '#mm-status.ok{background:rgba(76,175,80,.35)}#mm-status.warn{background:rgba(255,152,0,.35)}' +
       '#mm-status.error{background:rgba(244,67,54,.35)}' +
       '#mm-copy{width:100%;padding:10px;border:none;border-radius:4px;background:#4caf50;color:#fff;font-weight:600;cursor:pointer}' +

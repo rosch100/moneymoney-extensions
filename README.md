@@ -50,18 +50,19 @@ Beispiel: `COOKIE:SMSESSION=eyJ...;SSOTOKEN=eyJ...`
 
 4. Ausgabe als Passwort in MoneyMoney einfügen.
 
-**Variante B — Userscript (alle Cookie-Import-Banken)**
+**Variante B — Userscript (Chrome/Firefox)**
 
-Tampermonkey in Chrome, Firefox oder Safari. Erkennt die Bank automatisch, liest Cookies über `GM.cookie` (inkl. HttpOnly).
+Tampermonkey. Erkennt die Bank automatisch. HttpOnly-Cookies (z. B. BoA `SMSESSION`) brauchen `GM.cookie`.
 
 1. [Tampermonkey](https://www.tampermonkey.net/) installieren.
 2. `scripts/moneymoney-cookie-exporter.user.js` als Userscript anlegen.
-3. Bei der Bank einloggen (BoA: Kontoübersicht, Fidelity: Portfolio, Presidential: Dashboard).
-4. Button **MM** (Alt+C) → **Cookies kopieren** → als Passwort in MoneyMoney einfügen.
+3. Tampermonkey → **Erweitert** → **Sicherheit** → **Cookie-Zugriff: Alle**.
+4. Bei der Bank einloggen. BoA: Kontoübersicht auf **secure.bankofamerica.com** öffnen.
+5. Button **MM** (Alt+C) → **Cookies kopieren** → als Passwort in MoneyMoney einfügen.
+
+**Safari:** Tampermonkey kann HttpOnly dort nicht lesen (Safari-Limit). Stattdessen HAR exportieren (Variante A).
 
 Unterstützt: Bank of America, Fidelity, Presidential Bank.
-
-Ohne `GM.cookie`: HAR-Export (Variante A).
 
 **Variante C — Manuell (BoA)**
 
