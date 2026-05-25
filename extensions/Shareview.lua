@@ -10,7 +10,7 @@ WebBanking{
   version     = 1.00,
   url         = "https://portfolio.shareview.co.uk",
   services    = {"Shareview"},
-  description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA) oder Cookie Import"
+  description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA)"
 }
 
 local CONSTANTS = {
