@@ -1,6 +1,6 @@
-# MoneyMoney Extensions (US-Banken)
+# MoneyMoney Extensions (US- und UK-Broker)
 
-**Wichtig:** Login mit Benutzername und Passwort in MoneyMoney funktioniert bei diesen Banken **nicht**. Stattdessen Session-Cookies aus dem Browser importieren.
+**Wichtig:** Login mit Benutzername und Passwort in MoneyMoney funktioniert bei diesen Banken **nicht zuverlässig**. Empfohlen wird der Import von Session-Cookies aus dem Browser.
 
 MoneyMoney-Extensions laufen in **Lua ohne Browser-Engine**: kein JavaScript, keine clientseitige Kryptografie, kein Bot-Schutz-Fingerprint. US-Banken erwarten genau das beim Login — deshalb scheitert ein direkter Abruf; der Cookie-Import nutzt eine bereits im Browser etablierte Session.
 
@@ -9,6 +9,7 @@ MoneyMoney-Extensions laufen in **Lua ohne Browser-Engine**: kein JavaScript, ke
 | **Bank of America** | Clientseitige RSA-Verschlüsselung — in MoneyMoney-Lua nicht nachbildbar. |
 | **Fidelity** | Bot-Schutz (Akamai) blockiert programmatische Login-Requests. |
 | **Presidential Bank** | Nach MFA HttpOnly-Cookies (`rftoken`); MoneyMoney übernimmt diese nicht zuverlässig. |
+| **Shareview (Equiniti, UK)** | Direct-Login mit MFA möglich (Username, Geburtsdatum, Passwort, 6-stelliger Code). Cookie-Import als robuste Alternative. |
 
 **Workaround — Cookie-Import:** Im Browser einloggen, Cookies exportieren, als **Passwort** in MoneyMoney eintragen (Benutzername unverändert):
 
@@ -18,15 +19,17 @@ COOKIE:name=value;name2=value2
 
 Export-Methoden: Abschnitt [Cookie-Import](#cookie-import) unten.
 
-Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US-Banken.
+Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US- und UK-Broker.
 
 ## Extensions
 
-| Datei | Bank | Modus |
-|-------|------|-------|
+| Datei | Bank/Broker | Modus |
+|-------|-------------|-------|
 | `extensions/Bank of America.lua` | Bank of America | Cookie-Import |
 | `extensions/Fidelity.lua` | Fidelity | Cookie-Import |
 | `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
+| `extensions/Shareview.lua` | Equiniti Shareview Portfolio | Direct-Login + MFA, Cookie-Import |
+| `extensions/Shareview-XPath.lua` | Equiniti Shareview Portfolio (XPath-Variante) | Wie oben, aber HTML/XPath/`:submit()` statt Pattern-Parsing — experimentell |
 
 ## Installation
 
@@ -58,6 +61,7 @@ Tampermonkey: **Erweitert → Sicherheit → Cookie-Zugriff: Alle**.
    - BoA: `secure.bankofamerica.com` (Kontoübersicht)
    - Fidelity: `digital.fidelity.com`
    - Presidential: `www.presidentialpcbanking.com`
+   - Shareview: `portfolio.shareview.co.uk` (Holdings Summary)
 3. **MM** (Alt+C) → Cookies kopieren → als Passwort einfügen
 
 ### Safari und Fallback
@@ -75,6 +79,7 @@ HAR:
 python3 scripts/extract-boa-cookies.py export.har
 python3 scripts/extract-fidelity-cookies.py export.har
 python3 scripts/extract-presidential-cookies.py export.har
+python3 scripts/extract-shareview-cookies.py export.har
 ```
 
 crul (Safari):
@@ -86,6 +91,20 @@ npx --yes @kieranhunt/crul --url https://secure.bankofamerica.com --browsers saf
 BoA manuell: Network → `account-details.go` → Request Header **Cookie**.
 
 Cookies nach Login zeitnah exportieren.
+
+## Shareview Direct-Login (mit MFA)
+
+Alternative zum Cookie-Import — Login direkt aus MoneyMoney:
+
+| Feld | Format |
+|------|--------|
+| **Benutzername** | `username\|TT.MM.JJJJ` (Login-Username, Pipe, Geburtsdatum) |
+| **Passwort** | Shareview-Passwort |
+| **MFA** | 6-stelliger Authentication Code (von MoneyMoney abgefragt) |
+
+Beispiel-Benutzername: `max.mustermann|01.01.1970`
+
+Bei wiederholten Fehlversuchen: Cookie-Import nutzen (siehe oben). Shareview blockiert Konten nach mehrfachen MFA-Fehlern temporär.
 
 ## Lizenz
 
