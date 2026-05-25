@@ -10,6 +10,8 @@
 // @match        https://bankofamerica.com/*
 // @match        https://*.presidentialpcbanking.com/*
 // @match        https://presidentialpcbanking.com/*
+// @match        https://portfolio.shareview.co.uk/*
+// @match        https://*.shareview.co.uk/*
 // @grant        GM.cookie
 // @grant        GM_cookie
 // @grant        GM_setClipboard
@@ -68,6 +70,23 @@
         'SESSION_TOKEN', 'SESSION', 'FMISSESSIONID',
         'tkt', 'at', 'ag', 'rftoken', 'USPIBID',
         '__cf_bm', '_cfuvid', 'cf_clearance',
+      ],
+    },
+    shareview: {
+      label: 'Shareview',
+      match: /shareview\.co\.uk$/i,
+      cookieDomain: '.portfolio.shareview.co.uk',
+      sessionHost: 'portfolio.shareview.co.uk',
+      sessionPath: '/7/portfolio/default/en/Active/Pages/holdingssummary.aspx',
+      origins: [
+        'https://portfolio.shareview.co.uk',
+        'https://www.shareview.co.uk',
+      ],
+      critical: ['FedAuth', 'ASP.NET_SessionId', 'SPStsAuthContext_7PortfolioDefault'],
+      priority: [
+        'FedAuth', 'ASP.NET_SessionId', 'SPStsAuthContext_7PortfolioDefault',
+        'WSS_FullScreenMode', 'locatecc_DefaultPortfolio',
+        'IsPrivacyOn', 'ILiveInUKStatement', 'IsHtmlElementContentReplacerActive',
       ],
     },
   };

@@ -229,6 +229,159 @@ Session-Cookies löschen.
 
 ---
 
+## Equiniti Shareview Portfolio
+
+**Datei:** `extensions/Shareview.lua`
+
+### Registrierung
+
+```lua
+WebBanking {
+  version = "1.0.0",
+  url = "https://portfolio.shareview.co.uk",
+  services = {"Shareview"},
+  description = "Equiniti Shareview Portfolio - Direct Login (Username|DOB + Password + MFA) und Cookie Import"
+}
+```
+
+| Feld | Wert |
+|------|------|
+| Auswahl | Service **Shareview** |
+| Währung | GBP (GBX/Pence wird automatisch in GBP umgerechnet) |
+| Kontotyp | Wertpapierdepot (`AccountTypePortfolio`, `portfolio = true`) |
+
+### `SupportsBank(protocol, bankCode)`
+
+- `true` für `ProtocolWebBanking` und `bankCode` **Shareview** oder **Equiniti Shareview**
+
+### `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
+
+Direct-Login mit Zwei-Faktor-Authentifizierung gemäß [API](https://moneymoney.app/api/webbanking/#anmeldung-mit-zwei-faktor-authentifizierung).
+
+| Schritt | Inhalt |
+|---------|--------|
+| 1 | Username + Geburtsdatum + Passwort **oder** `COOKIE:`-Import |
+| 2 | 6-stelliger Authentication Code aus Shareview-App / E-Mail |
+
+**Username-Format mit Geburtsdatum:** `username|TT.MM.JJJJ`
+
+| Feld | Beispiel |
+|------|----------|
+| `username` | `max.mustermann\|01.01.1970` |
+| `password` | Shareview-Passwort **oder** `COOKIE:FedAuth=…;ASP.NET_SessionId=…` |
+
+Hintergrund: Shareview verlangt Username, Passwort und Geburtsdatum (Tag, Monat, Jahr) auf der Login-Seite. Da MoneyMoney standardmäßig nur ein Username-Feld zeigt, wird das Geburtsdatum mit `|` an den Username angehängt und intern in die drei Dropdown-Felder (`drpDay`, `drpMonth`, `drpYear`) aufgeteilt.
+
+#### Federation-Flow (Step 2 → Holdings)
+
+Nach erfolgreicher OTP-Validierung antwortet Shareview mit einer ASP.NET-`<form name="hiddenform">`-Auto-Post-Page, die im Browser per JavaScript an die ADFS-Endpoints weitergeleitet wird (WS-Federation/SAML 1.1):
+
+1. `POST https://www.equiniti.com/adfs/ls/` mit `wa`, `wresult` (SAML-Token), `wctx`
+2. ADFS antwortet mit weiterer Federation-Form an `https://portfolio.shareview.co.uk/_trust/`
+3. Erst danach ist der `FedAuth`-Cookie gesetzt und `holdingssummary.aspx` zugänglich.
+
+Da die Lua-`Connection` keine HTML-Form-Auto-Submits ausführt, fährt `Shareview.lua` diese Hops in `followAutoPostForms()` manuell nach (mit Heuristik auf `<title>Working...</title>` bzw. `name="hiddenform"`). Das `wresult`-XML enthält literale `>` und `/>` (HTML5-konformes Attribut), daher werden Form-Felder nicht über `<input ... />`-Tag-Boundaries, sondern direkt per `name="X" value="..." />`-Pattern extrahiert.
+
+#### Cookie-Import (empfohlen bei wiederholten MFA-Problemen)
+
+Passwortfeld in MoneyMoney: `COOKIE:name=value;name2=value2`
+
+**Pflicht-Cookies:** `FedAuth`, `ASP.NET_SessionId`, `SPStsAuthContext_7PortfolioDefault`
+
+**Hinweis:** `FedAuth` ist HttpOnly — Export nur per Tampermonkey (`GM.cookie`), HAR-Export oder DevTools möglich. Siehe [README — Cookie-Import](../README.md#cookie-import).
+
+Rückgabe: `nil` bei Erfolg, sonst Fehlerstring oder `LoginFailed`.
+
+### `ListAccounts(knownAccounts)`
+
+- Eine konsolidierte Position **„Shareview Portfolio"** mit allen Holdings als Wertpapiere
+- Felder: `name`, `accountNumber` (`shareview-portfolio`), `portfolio = true`, `currency = "GBP"`, `type = AccountTypePortfolio`, `bankCode = "Shareview"`
+
+### `RefreshAccount(account, since)`
+
+Depot: `since` wird ignoriert (Wertpapierdepot ohne Transaktionsliste).
+
+Rückgabe:
+
+| Feld | Inhalt |
+|------|--------|
+| `balance` | Total Indicative Value aus `holdingssummary.aspx` (in GBP) |
+| `securities` | Positionen aus allen drei Web-Parts (Equiniti-administriert, Self-maintained Funds, Self-maintained Holdings) |
+
+**Pro Wertpapier:**
+
+| Feld | Quelle |
+|------|--------|
+| `name` | `<strong>Companyname</strong>` + Sub-Account |
+| `isin` | aus Morningstar-Link `externalid=<ISIN>` |
+| `securityNumber` | Shareholder Reference Number |
+| `quantity` | Spalte „Quantity" |
+| `price` | Spalte „Price" (GBX → GBP, geteilt durch 100) |
+| `amount` | Spalte „Value" (GBX → GBP) |
+| `currencyOfPrice` / `currencyOfOriginalAmount` | Native Währung, GBX wird zu GBP normalisiert |
+
+Datenquelle: HTML der `holdingssummary.aspx`-Seite (ASP.NET WebForms / SharePoint), kein JSON-API.
+
+### `EndSession()`
+
+Optionaler GET auf `Logoff.aspx`; lokale Session-Cookies werden zurückgesetzt.
+
+### Bekannte Einschränkungen
+
+- **Keine Transaktionen / Dividenden** in v1 — nur aktuelles Portfolio. Statements liegen unter `statement.aspx?sid=<refNo>` (HTML-Tabelle, künftige Erweiterung).
+- **Sperre nach MFA-Fehlversuchen:** Drei aufeinanderfolgende falsche OTPs sperren das Konto temporär. Im Zweifel Cookie-Import nutzen.
+- **Nur GBP-Anzeige getestet:** Andere Display-Währungen (USD, EUR) werden vom Format-Parser unterstützt, aber nicht mit Realdaten verifiziert.
+
+---
+
+## Equiniti Shareview Portfolio (XPath-Variante, experimentell)
+
+**Datei:** `extensions/Shareview-XPath.lua`
+**Service:** `Shareview-XPath` (parallel zu `Shareview` installierbar)
+
+Funktionsidentische Variante zu `Shareview.lua`, nutzt aber MoneyMoneys integrierte HTML/XPath-API (`HTML(content)`, `:xpath(...)`, `:submit()`) anstelle von manuellem Lua-Pattern-Parsing für Form-Handling. Inspiriert vom EquatePlus-Plugin ([neatc0der/equateplus-moneymoney](https://github.com/neatc0der/equateplus-moneymoney)), das das gleiche Equiniti-Backbone, aber unterschiedliche Endpunkte nutzt.
+
+### Vorteile gegenüber `Shareview.lua`
+
+| Bereich | Pattern-Variante (`Shareview.lua`) | XPath-Variante (`Shareview-XPath.lua`) |
+|---|---|---|
+| ASP.NET-Hidden-Inputs | manuell via `<input[^>]+>`-Pattern eingesammelt | automatisch durch `:submit()` |
+| SAML-`wresult`-Wert (mit literalen `>`/`/>`) | spezialisiertes `name="X" value="(.-)" />`-Pattern | echter HTML-Parser, problemlos |
+| MFA-Feld-Locator | Heuristik (`btnSubmitOtp`/`txtVerificationCode`) | XPath `contains(@id, "txtVerificationCode")` |
+| Federation-Auto-Post | manuelle `followAutoPostForms()`-Schleife | `:submit()` der `<form name="hiddenform">` |
+| Code-Umfang | ~640 Zeilen | ~550 Zeilen |
+
+### Locator-Strategie
+
+ASP.NET vergibt dynamische Control-IDs mit GUIDs (`ctl00$SPWebPartManager1$g_82244877_…$UserLocate2UC1$rpt$ctl00$txtInput`). Statt diese hart zu codieren, arbeitet `Shareview-XPath.lua` mit `contains(@id, "...")`-Substring-Matches:
+
+| Feld | XPath |
+|---|---|
+| Username | `//input[contains(@id, "UserLocate2UC1_rpt_ctl00_txtInput")]` |
+| Passwort | `//input[contains(@id, "UserLocate2UC1_rpt_ctl02_txtInput")]` |
+| DOB Tag/Monat/Jahr | `//select[contains(@id, "drpDay")]/option[@value="…"]` etc. |
+| Locate-Button (`__EVENTTARGET`) | `//input[contains(@id, "btnLocate")]` → `:attr("name")` |
+| OTP-Eingabe | `//input[contains(@id, "txtVerificationCode")]` |
+| OTP-Submit | `//input[contains(@id, "btnSubmitOtp")]` → `:attr("name")` |
+| Federation-Form | `//form[@name="hiddenform"]` |
+
+### Verifikation
+
+**Wichtig:** Diese Variante ist nur in der MoneyMoney-Runtime verifizierbar. Der lokale Test-Harness (`test_shareview_live.lua`) basiert auf `curl` und kann die `HTML()`/`xpath()`/`:submit()`-API nicht stubben. Daher:
+
+1. `Shareview-XPath.lua` ins MoneyMoney-Extensions-Verzeichnis kopieren.
+2. In MoneyMoney *Konto hinzufügen → Wertpapierdepot → Service "Shareview-XPath"*.
+3. Username `username|TT.MM.JJJJ`, Passwort wie gewohnt.
+4. Bei Fehlern: Console-Log in MoneyMoney prüfen, ggf. `XPath`-Locator anpassen (ASP.NET-Control-IDs können sich ändern).
+
+Die robuste Pattern-Variante (`Shareview.lua`) bleibt als Fallback unverändert verfügbar und ist live nachweislich funktionsfähig.
+
+### Holdings-Parsing
+
+Das Parsen der `holdingssummary.aspx`-Tabelle (HTML-Patterns) ist **identisch** zur Pattern-Variante — die Holdings-Page ist stabil und live verifiziert; ein zusätzlicher XPath-Refactor brächte hier keinen Mehrwert.
+
+---
+
 ## Entwicklung
 
 Lokaler Test BoA:
