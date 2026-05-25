@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 --
 -- Equiniti Shareview Portfolio — MoneyMoney Web Banking Extension
 -- https://portfolio.shareview.co.uk
@@ -5,28 +6,19 @@
 -- API: https://moneymoney.app/api/webbanking/
 --
 
-WebBanking {
-  version = "1.0.0",
-  url = "https://portfolio.shareview.co.uk",
-  services = {"Shareview"},
-  description = "Equiniti Shareview Portfolio - Direct Login (Username|DOB + Password + MFA) und Cookie Import"
+WebBanking{
+  version     = 1.00,
+  url         = "https://portfolio.shareview.co.uk",
+  services    = {"Shareview"},
+  description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA) oder Cookie Import"
 }
 
 local CONSTANTS = {
-  baseUrl = "https://portfolio.shareview.co.uk",
-  loginUrl = "https://portfolio.shareview.co.uk/7/Portfolio/default/en/anonymous/Pages/Login.aspx",
+  baseUrl     = "https://portfolio.shareview.co.uk",
+  loginUrl    = "https://portfolio.shareview.co.uk/7/Portfolio/default/en/anonymous/Pages/Login.aspx",
   holdingsUrl = "https://portfolio.shareview.co.uk/7/portfolio/default/en/Active/Pages/holdingssummary.aspx",
-  logoutUrl = "https://portfolio.shareview.co.uk/7/Auth/Logoff.aspx",
-  userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-  -- ASP.NET WebForms Steuer-IDs (aus HAR-Capture des Login-Formulars)
-  field = {
-    username  = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$rpt$ctl00$txtInput",
-    day       = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$rpt$ctl01$dtInput$drpDay",
-    month     = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$rpt$ctl01$dtInput$drpMonth",
-    year      = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$rpt$ctl01$dtInput$drpYear",
-    password  = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$rpt$ctl02$txtInput",
-    locateBtn = "ctl00$SPWebPartManager1$g_82244877_0bab_4d69_9780_dbb1a7f3fbea$UserLocate2UC1$btnLocate"
-  }
+  logoutUrl   = "https://portfolio.shareview.co.uk/7/Auth/Logoff.aspx",
+  userAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 }
 
 local connection
@@ -46,142 +38,72 @@ local function htmlDecode(text)
   text = text:gsub("&amp;", "&"):gsub("&lt;", "<"):gsub("&gt;", ">")
              :gsub("&quot;", "\""):gsub("&#39;", "'"):gsub("&nbsp;", " ")
   text = text:gsub("&#x([%da-fA-F]+);", function(h)
-    local n = tonumber(h, 16)
-    return n and string.char(n) or ""
+    local n = tonumber(h, 16); return n and string.char(n) or ""
   end)
   text = text:gsub("&#(%d+);", function(d)
-    local n = tonumber(d)
-    return n and string.char(n) or ""
+    local n = tonumber(d); return n and string.char(n) or ""
   end)
   return text
 end
 
-local function stripTags(html)
-  if not html then return "" end
-  return trim(htmlDecode((html:gsub("<[^>]+>", " "):gsub("%s+", " "))))
+local function stripTags(s)
+  if not s then return "" end
+  return trim(htmlDecode((s:gsub("<[^>]+>", " "):gsub("%s+", " "))))
 end
 
--- urlencode: Lua 5.1 hat keine eingebaute Funktion, MoneyMoney stellt MM.urlencode bereit
-local function urlencode(value)
-  if value == nil then return "" end
-  return MM.urlencode(tostring(value))
+-- DOB-Helper sind global, damit tests/test_shareview.lua sie direkt aufrufen kann.
+function parseDobString(raw)
+  if not raw then return nil, nil, nil end
+  local d, m, y = trim(raw):match("^(%d+)[%./%-](%d+)[%./%-](%d+)$")
+  if not d then return nil, nil, nil end
+  return tonumber(d), tonumber(m), tonumber(y)
 end
 
--- VIEWSTATE und ähnliche Hidden-Felder aus HTML extrahieren
-local function extractHidden(html, name)
-  if not html or not name then return nil end
-  local quoted = name:gsub("([%-%.%+%[%]%(%)%$%^%%%?%*])", "%%%1")
-  local pattern = '<input[^>]*name="' .. quoted .. '"[^>]*value="([^"]*)"'
-  local value = html:match(pattern)
-  if value then return htmlDecode(value) end
-  pattern = '<input[^>]*value="([^"]*)"[^>]*name="' .. quoted .. '"'
-  value = html:match(pattern)
-  if value then return htmlDecode(value) end
-  return nil
+function isValidDob(day, month, year)
+  if not (day and month and year) then return false end
+  if day   < 1    or day   > 31   then return false end
+  if month < 1    or month > 12   then return false end
+  if year  < 1900 or year  > 2100 then return false end
+  return true
 end
 
--- DOB aus username-Feld parsen: "username|DD.MM.YYYY" oder "username|DD/MM/YYYY"
+-- Username + optionales "|TT.MM.JJJJ" parsen. DOB nil -> Multi-Step-Abfrage.
 function parseUsernameDob(rawUsername)
-  if not rawUsername or rawUsername == "" then
-    return nil, nil, nil, nil
-  end
+  if not rawUsername or rawUsername == "" then return nil end
   local user, dob = rawUsername:match("^([^|]+)|(.+)$")
-  if not user then
-    return trim(rawUsername), nil, nil, nil
-  end
-  user = trim(user)
-  dob = trim(dob)
-  local d, m, y = dob:match("^(%d+)[%./%-](%d+)[%./%-](%d+)$")
-  if not d or not m or not y then
-    return user, nil, nil, nil
-  end
-  local dn, mn, yn = tonumber(d), tonumber(m), tonumber(y)
-  if not dn or not mn or not yn then
-    return user, nil, nil, nil
-  end
-  return user, dn, mn, yn
+  if not user then return trim(rawUsername) end
+  return trim(user), parseDobString(dob)
 end
 
--- Sammelt alle Hidden- und sonstigen Initial-Werte aus dem HTML in der
--- Reihenfolge, in der sie im DOM stehen (entspricht dem Browser-POST).
--- Override-Werte aus `fields` ersetzen ggf. bestehende Hidden-Werte.
-local function buildFormBody(html, fields)
-  local seen = {}
-  local parts = {}
-
-  -- 1) Override-Felder zuerst registrieren, damit Hidden-Duplikate übersprungen werden
-  local overrides = {}
-  for _, pair in ipairs(fields) do
-    overrides[pair[1]] = pair[2]
-  end
-
-  -- 2) Alle Hidden-Inputs aus dem HTML in DOM-Reihenfolge übernehmen
-  for tag in html:gmatch("<input[^>]+>") do
-    local typ = tag:match('type="([^"]+)"')
-    if not typ or typ:lower() == "hidden" then
-      local name = tag:match('name="([^"]+)"')
-      local value = tag:match('value="([^"]*)"') or ""
-      if name and not seen[name] then
-        seen[name] = true
-        local effective = overrides[name]
-        if effective == nil then effective = htmlDecode(value) end
-        table.insert(parts, urlencode(name) .. "=" .. urlencode(effective))
-      end
-    end
-  end
-
-  -- 3) Override-Felder, die nicht als Hidden im DOM vorkommen, anhängen
-  for _, pair in ipairs(fields) do
-    if not seen[pair[1]] then
-      seen[pair[1]] = true
-      table.insert(parts, urlencode(pair[1]) .. "=" .. urlencode(pair[2]))
-    end
-  end
-
-  return table.concat(parts, "&")
-end
-
-local function requestHtml(method, url, body, contentType, extraHeaders)
-  local headers = {
-    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    ["Accept-Language"] = "en-GB,en;q=0.9",
-    ["Cookie"] = session.cookies
-  }
-  if extraHeaders then
-    for k, v in pairs(extraHeaders) do headers[k] = v end
-  end
-  local response, _, _ = connection:request(method, url, body, contentType, headers)
-  local newCookies = connection:getCookies()
-  if newCookies and newCookies ~= "" then
-    session.cookies = newCookies
-  end
-  return response
-end
-
--- Currency-Format aus Shareview-HTML parsen: z.B. "GBX|10.0000|99|1|.|,|6"
--- Rückgabe: amountInGbp (Number), nativeCurrency ("GBP"|"GBX"|"USD"|...), nativeAmount (Number)
+-- Currency-Format aus Shareview-HTML, z.B. "GBX|10.0000|99|1|.|,|6".
+-- Rückgabe: amountInGbp, nativeCurrency, nativeAmount.
 function parseCurrencyValue(raw)
   if not raw then return nil, nil, nil end
   local parts = {}
-  for part in (raw .. "|"):gmatch("([^|]*)|") do
-    table.insert(parts, part)
-  end
+  for part in (raw .. "|"):gmatch("([^|]*)|") do parts[#parts + 1] = part end
   if #parts < 2 then return nil, nil, nil end
   local currency = trim(parts[1])
   local value = tonumber(parts[2])
   if not value then return nil, nil, nil end
-  -- GBX = britische Pence; MoneyMoney rechnet in GBP
-  if currency == "GBX" or currency == "GBp" then
-    return value / 100, "GBX", value
-  end
+  if currency == "GBX" or currency == "GBp" then return value / 100, "GBX", value end
   return value, currency, value
 end
 
--- Erste currencyChange-/currencyChangeIgnoreNative-Span finden, deren "original"-Sub-Span
--- den Native-Wert enthält. Rückgabe: native-Currency-String oder nil.
-local function findFirstCurrencySpan(html, pattern)
-  if not html then return nil end
-  return html:match(pattern)
+local function normalizeCurrency(c)
+  if c == "GBX" or c == "GBp" then return "GBP" end
+  if not c or c == "" then return "GBP" end
+  return c
+end
+
+-- Form-Submit über die MoneyMoney-HTML/XPath-API (idiomatisch laut Doku):
+--   connection:request(formNode:submit())
+-- Klare Fehlermeldung, falls XPath die Form nicht findet (sonst nil-Crash im
+-- nachfolgenden connection:request).
+local function submitForm(formNode)
+  if not formNode or formNode:length() == 0 then
+    return nil, "Form-Element nicht gefunden (XPath traf nicht)."
+  end
+  return connection:request(formNode:submit())
 end
 
 -- ============================================================================
@@ -189,220 +111,189 @@ end
 -- ============================================================================
 
 function SupportsBank(protocol, bankCode)
-  return protocol == ProtocolWebBanking and (bankCode == "Shareview" or bankCode == "Equiniti Shareview")
+  return protocol == ProtocolWebBanking and bankCode == "Shareview"
 end
 
+-- Step 1 erhält {username, password} aus dem Keychain. Folge-Steps werden
+-- state-basiert dispatcht, weil zwischen Step 1 und MFA optional ein
+-- DOB-Step liegt (wenn der Username keinen "|TT.MM.JJJJ"-Suffix enthält).
 function InitializeSession2(protocol, bankCode, step, credentials, interactive)
-  connection = Connection()
-  connection.language = "en-GB"
-  connection.useragent = CONSTANTS.userAgent
-
   if step == 1 then
-    return loginStep1(credentials)
-  elseif step == 2 then
-    return loginStep2(credentials)
+    connection = Connection()
+    connection.language = "en-GB"
+    connection.useragent = CONSTANTS.userAgent
+    return loginStep1(credentials, interactive)
   end
+  if session.awaitingDob then return submitDobAndLogin(credentials[1]) end
+  if session.awaitingMfa then return submitMfaCode(credentials) end
   return LoginFailed
 end
 
--- ============================================================================
--- Login Step 1: Cookie-Import oder Username+DOB+Password POST
--- ============================================================================
-
-function loginStep1(credentials)
+function loginStep1(credentials, interactive)
   local rawUsername = credentials[1]
-  local password = credentials[2]
+  local password    = credentials[2]
 
-  if not password or password == "" then
-    return LoginFailed
-  end
-
-  if password:match("^COOKIE:") then
-    return loginWithImportedCookies(password:sub(8))
-  end
+  if not password or password == "" then return LoginFailed end
+  if password:match("^COOKIE:") then return loginWithImportedCookies(password:sub(8)) end
 
   local username, day, month, year = parseUsernameDob(rawUsername)
   if not username or username == "" then
-    return "Bitte Username im Format \"username|TT.MM.JJJJ\" eingeben (Geburtsdatum erforderlich)."
-  end
-  if not day or not month or not year then
-    return "Geburtsdatum fehlt. Username-Format: \"username|TT.MM.JJJJ\" (z.B. max.mustermann|01.01.1970)."
-  end
-  if day < 1 or day > 31 or month < 1 or month > 12 or year < 1900 or year > 2100 then
-    return "Ungültiges Geburtsdatum. Format: TT.MM.JJJJ."
+    return "Bitte einen Shareview-Benutzernamen eingeben."
   end
 
-  MM.printStatus("Shareview: Login-Seite laden...")
-  local loginPage = requestHtml("GET", CONSTANTS.loginUrl)
-  if not loginPage then
-    return "Login fehlgeschlagen: Login-Seite nicht erreichbar."
+  if day and month and year then
+    if not isValidDob(day, month, year) then
+      return "Ungültiges Geburtsdatum im Benutzernamen. Format: \"username|TT.MM.JJJJ\"."
+    end
+    return submitCredentials(username, password, day, month, year)
   end
 
-  if not extractHidden(loginPage, "__VIEWSTATE") then
-    return "Login fehlgeschlagen: VIEWSTATE nicht gefunden (Seitenstruktur geändert?)."
+  if interactive == false then
+    return "Geburtsdatum fehlt. Bitte den Benutzernamen einmalig als \"username|TT.MM.JJJJ\" speichern (z.B. \"" .. username .. "|01.01.1970\"), damit das automatische Sync funktioniert."
   end
 
-  MM.printStatus("Shareview: Zugangsdaten senden...")
-  local formBody = buildFormBody(loginPage, {
-    {"__EVENTTARGET", CONSTANTS.field.locateBtn},
-    {"__EVENTARGUMENT", ""},
-    {"CurrencyFeedUrl", "/7/Pages/CurrencyExchangeFeed.aspx?s=/7/Portfolio/default/en/anonymous/"},
-    {"ctl00$IsCurrencyConversionAndFormattingEnabled", "true"},
-    {"ctl00$CurrentCurrencyConversionSelection", "GBP"},
-    {"ctl00$IsNativeCurrencyOptionSelected", "false"},
-    {"ctl00$IsCurrencyConvertAndFormatPrivate", "false"},
-    {CONSTANTS.field.username, username},
-    {CONSTANTS.field.day, tostring(day)},
-    {CONSTANTS.field.month, tostring(month)},
-    {CONSTANTS.field.year, tostring(year)},
-    {CONSTANTS.field.password, password}
-  })
-
-  local mfaPage = requestHtml("POST", CONSTANTS.loginUrl, formBody,
-    "application/x-www-form-urlencoded",
-    { ["Origin"] = CONSTANTS.baseUrl, ["Referer"] = CONSTANTS.loginUrl })
-
-  if not mfaPage then
-    return "Login fehlgeschlagen: Keine Antwort vom Server."
-  end
-
-  -- Erfolgsfall: bereits eingeloggt (kein MFA nötig — selten, aber möglich)
-  if isLoggedInPage(mfaPage) then
-    MM.printStatus("Shareview: Login ohne MFA erfolgreich.")
-    return nil
-  end
-
-  -- Fehler-Erkennung: typische Login-Fehlermeldungen
-  local loginError = extractLoginError(mfaPage)
-  if loginError then
-    return "Login fehlgeschlagen: " .. loginError
-  end
-
-  if not isMfaPage(mfaPage) then
-    return "Login fehlgeschlagen: Unerwartete Antwort. Bitte Zugangsdaten und Geburtsdatum prüfen."
-  end
-
-  session.mfaHtml = mfaPage
+  session.awaitingDob = true
+  session.pendingUsername = username
+  session.pendingPassword = password
   return {
-    title = "Shareview Authentifizierung",
-    challenge = "Bitte den 6-stelligen Authentication Code aus der Shareview-App oder E-Mail eingeben.",
-    label = "Authentication Code"
+    title     = "Geburtsdatum erforderlich",
+    challenge = "Bitte das Geburtsdatum für Shareview eingeben (Format TT.MM.JJJJ).\n\nTipp: Speichere es dauerhaft als Teil des Benutzernamens (\"" .. username .. "|01.01.1970\"), dann entfällt diese Abfrage künftig.",
+    label     = "Geburtsdatum (TT.MM.JJJJ)"
   }
 end
 
--- ============================================================================
--- Login Step 2: 6-stelligen MFA-Code senden
--- ============================================================================
+function submitDobAndLogin(dobRaw)
+  session.awaitingDob = false
+  local username, password = session.pendingUsername, session.pendingPassword
+  session.pendingUsername, session.pendingPassword = nil, nil
+  if not username or not password then return LoginFailed end
 
-function loginStep2(credentials)
+  local day, month, year = parseDobString(dobRaw)
+  if not isValidDob(day, month, year) then
+    return "Ungültiges Geburtsdatum. Erwartet: TT.MM.JJJJ (z.B. 01.01.1970)."
+  end
+  return submitCredentials(username, password, day, month, year)
+end
+
+-- Login-POST via HTML/XPath. Bei Erfolg: setzt session.awaitingMfa.
+function submitCredentials(username, password, day, month, year)
+  MM.printStatus("Shareview: Zugangsdaten senden...")
+  local content = connection:get(CONSTANTS.loginUrl)
+  if not content or content == "" then
+    return "Login fehlgeschlagen: Login-Seite nicht erreichbar."
+  end
+
+  local html = HTML(content)
+
+  -- ASP.NET-WebForms: die `id`-Attribute enthalten dynamische GUIDs, daher
+  -- per `contains(@id, "...")`-Substring-Match auf die stabilen Suffixe.
+  html:xpath('//input[contains(@id, "UserLocate2UC1_rpt_ctl00_txtInput")]'):attr("value", username)
+  html:xpath('//input[contains(@id, "UserLocate2UC1_rpt_ctl02_txtInput")]'):attr("value", password)
+  html:xpath('//select[contains(@id, "drpDay")]/option[@value="'   .. day   .. '"]'):attr("selected", "selected")
+  html:xpath('//select[contains(@id, "drpMonth")]/option[@value="' .. month .. '"]'):attr("selected", "selected")
+  html:xpath('//select[contains(@id, "drpYear")]/option[@value="'  .. year  .. '"]'):attr("selected", "selected")
+
+  -- ASP.NET-Postback: __EVENTTARGET = Name des Locate-Buttons
+  local locateBtn = html:xpath('//input[contains(@id, "btnLocate") or contains(@name, "btnLocate")]'):attr("name")
+  html:xpath('//input[@name="__EVENTTARGET"]'):attr("value", locateBtn or "")
+
+  -- Die Form wird per name selektiert (id ist dynamisch, z.B. "ctl31").
+  local mfaContent, submitErr = submitForm(html:xpath('//form[@name="aspnetForm"]'))
+  if submitErr then return "Login fehlgeschlagen: " .. submitErr end
+  if not mfaContent or mfaContent == "" then
+    return "Login fehlgeschlagen: Keine Antwort vom Server."
+  end
+
+  if isLoggedInPage(mfaContent) then
+    session.holdingsHtmlString = mfaContent
+    return nil
+  end
+
+  local loginError = extractLoginError(HTML(mfaContent))
+  if loginError then return "Login fehlgeschlagen: " .. loginError end
+  if not isMfaPage(mfaContent) then
+    return "Login fehlgeschlagen: Unerwartete Antwort. Bitte Zugangsdaten und Geburtsdatum prüfen."
+  end
+
+  session.mfaHtmlString = mfaContent
+  session.awaitingMfa = true
+  return {
+    title     = "Shareview Authentifizierung",
+    challenge = "Bitte den 6-stelligen Authentication Code aus der Shareview-App oder E-Mail eingeben.",
+    label     = "Authentication Code"
+  }
+end
+
+function submitMfaCode(credentials)
+  session.awaitingMfa = false
   local code = credentials[1]
   if not code or not code:match("^%s*%d+%s*$") then
     return "Ungültiger Authentication Code: nur Ziffern erwartet."
   end
   code = trim(code)
 
-  local mfaHtml = session.mfaHtml
-  if not mfaHtml then
-    return LoginFailed
-  end
+  if not session.mfaHtmlString then return LoginFailed end
+  local mfaHtml = HTML(session.mfaHtmlString)
 
-  local mfaSubmitField, mfaCodeField = findMfaFields(mfaHtml)
-  if not mfaSubmitField or not mfaCodeField then
-    return "MFA-Feld nicht gefunden (Seitenstruktur geändert?). Bitte Cookie-Import verwenden."
-  end
+  mfaHtml:xpath('//input[contains(@id, "txtVerificationCode") or contains(@name, "txtVerificationCode")]'):attr("value", code)
+  local submitBtn = mfaHtml:xpath('//input[contains(@id, "btnSubmitOtp") or contains(@name, "btnSubmitOtp")]'):attr("name")
+  mfaHtml:xpath('//input[@name="__EVENTTARGET"]'):attr("value", submitBtn or "")
 
   MM.printStatus("Shareview: Authentication Code senden...")
-  local formBody = buildFormBody(mfaHtml, {
-    {"__EVENTTARGET", mfaSubmitField},
-    {"__EVENTARGUMENT", ""},
-    {mfaCodeField, code}
-  })
+  local otpResponse, submitErr = submitForm(mfaHtml:xpath('//form[@name="aspnetForm"]'))
+  session.mfaHtmlString = nil
 
-  local response = requestHtml("POST", CONSTANTS.loginUrl, formBody,
-    "application/x-www-form-urlencoded",
-    { ["Origin"] = CONSTANTS.baseUrl, ["Referer"] = CONSTANTS.loginUrl })
-
-  session.mfaHtml = nil
-
-  if not response then
+  if submitErr then return "MFA fehlgeschlagen: " .. submitErr end
+  if not otpResponse then
     return "MFA fehlgeschlagen: Keine Antwort vom Server."
   end
 
-  -- Bei OTP-Fehler bleibt die MFA-Seite stehen
-  if response:match("Please enter a 6 digit Authentication Code")
-     or response:match('id="otpErrorLabelWrapper"[^>]*>%s*<span>') then
+  if otpResponse:match("Please enter a 6 digit Authentication Code")
+     or otpResponse:match('id="otpErrorLabelWrapper"[^>]*>%s*<span>') then
     return "Authentication Code abgelehnt. Bitte erneut versuchen."
   end
 
-  -- Erfolgsfall: ADFS/WS-Federation Auto-Post-Form folgen
-  response = followAutoPostForms(response, 5)
+  -- WS-Federation/SAML-Hops nachfahren (Browser würde via JS auto-submitten).
+  otpResponse = followFederationHops(otpResponse, 5)
 
-  -- Holdings-Seite testen
-  local holdings = requestHtml("GET", CONSTANTS.holdingsUrl)
+  local holdings = connection:get(CONSTANTS.holdingsUrl)
   if holdings and isLoggedInPage(holdings) then
-    session.holdingsHtml = holdings
-    MM.printStatus("Shareview: Login erfolgreich.")
+    session.holdingsHtmlString = holdings
     return nil
   end
 
-  if response and response:lower():match("authentication code") then
+  if otpResponse and otpResponse:lower():match("authentication code") then
     return "Authentication Code abgelehnt. Bitte erneut versuchen."
   end
   return "MFA fehlgeschlagen. Bitte Cookie-Import verwenden."
 end
 
--- Browser-Auto-Submit von <form action="..." method="POST">-Pages nachstellen
--- (WS-Federation/SAML-Federation: Server liefert eine Page mit hiddenform,
--- die via JS submit()'d wird; curl macht das nicht von selbst).
-function followAutoPostForms(html, maxHops)
-  maxHops = maxHops or 5
-  for hop = 1, maxHops do
-    if not html or html == "" then return html end
-    local action = html:match('<form[^>]-method="POST"[^>]-action="([^"]+)"')
-                 or html:match('<form[^>]-action="([^"]+)"[^>]-method="POST"')
-                 or html:match('<form[^>]-method="post"[^>]-action="([^"]+)"')
-    if not action then return html end
+-- ADFS / WS-Federation-Pages enthalten <form name="hiddenform">, die der
+-- Browser per document.forms[0].submit() automatisch absendet. Wir machen
+-- dasselbe per :submit(), bis keine Auto-Post-Page mehr kommt.
+function followFederationHops(content, maxHops)
+  for _ = 1, (maxHops or 5) do
+    if not content or content == "" then return content end
+    local html = HTML(content)
+    local form = html:xpath('//form[@name="hiddenform"]')
+    local title = html:xpath('//title'):text() or ""
+    local isAutoPost = title:match("Working") ~= nil
+                       or content:match("document%.forms%[0%]%.submit") ~= nil
+                       or content:match('<form[^>]+name="hiddenform"') ~= nil
+    if not isAutoPost or not form or form:length() == 0 then return content end
 
-    -- Indikator: Auto-Post (entweder body onload oder Title "Working...")
-    local isAutoPost = html:match("document%.forms%[0%]%.submit") ~= nil
-                       or html:match("<title[^>]*>%s*Working") ~= nil
-                       or html:match('<form[^>]+name="hiddenform"') ~= nil
-    if not isAutoPost then return html end
-
-    action = htmlDecode(action)
-    local parts = {}
-    -- ADFS/SAML-Forms (XHTML <input ... />) enthalten im wresult-Value
-    -- literal '>'/'/>' (HTML5-kompatibel), daher matcht ein Pattern wie
-    -- '<input[^>]+>' oder '<input.-/>' das Tag falsch.
-    -- Robust: direkt name="X" value="..." /> als Pair extrahieren
-    -- (non-greedy value bis zum nächsten '"' direkt vor '/>').
-    -- Pre-Filter auf die hiddenform-Section, damit wir keine fremden Inputs einsammeln.
-    local formStart = html:find('<form[^>]-name="hiddenform"')
-                    or html:find('<form[^>]+method="POST"')
-                    or 1
-    local formEnd = html:find("</form>", formStart, true) or #html
-    local formHtml = html:sub(formStart, formEnd)
-
-    for name, value in formHtml:gmatch('name="([^"]+)"%s+value="(.-)"%s*/>') do
-      table.insert(parts, urlencode(name) .. "=" .. urlencode(htmlDecode(value)))
-    end
-    local body = table.concat(parts, "&")
-
-    MM.printStatus(string.format("Shareview: Federation-Hop %d -> %s", hop, action))
-    html = requestHtml("POST", action, body, "application/x-www-form-urlencoded", {
-      ["Origin"] = CONSTANTS.baseUrl,
-      ["Referer"] = CONSTANTS.baseUrl .. "/"
-    })
+    local nextContent, hopErr = submitForm(form)
+    if hopErr then return content end
+    content = nextContent
   end
-  return html
+  return content
 end
 
 -- ============================================================================
--- Cookie-Import-Modus
+-- Cookie-Import-Modus (Passwort beginnt mit "COOKIE:")
 -- ============================================================================
 
 function loginWithImportedCookies(cookieString)
-  MM.printStatus("Shareview: Importierte Cookies verwenden...")
   local formatted = trim(cookieString)
   if formatted:match(",") and not formatted:match(";") then
     formatted = formatted:gsub("%s*,%s*", "; ")
@@ -414,218 +305,174 @@ function loginWithImportedCookies(cookieString)
     return "FedAuth-Cookie fehlt. Bitte erneut nach erfolgreichem Login exportieren."
   end
 
-  session.cookies = formatted
-  local holdings = requestHtml("GET", CONSTANTS.holdingsUrl)
-  if not holdings then
-    return "Cookie-Import fehlgeschlagen: Holdings-Seite nicht erreichbar."
-  end
-  if not isLoggedInPage(holdings) then
+  local response = connection:request("GET", CONSTANTS.holdingsUrl, nil, nil, {
+    ["Accept"]          = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    ["Accept-Language"] = "en-GB,en;q=0.9",
+    ["Cookie"]          = formatted
+  })
+
+  if not response or not isLoggedInPage(response) then
     return "Cookie-Import fehlgeschlagen. Cookies abgelaufen — bitte erneut exportieren."
   end
 
-  session.holdingsHtml = holdings
-  MM.printStatus("Shareview: Cookie-Import erfolgreich.")
+  session.cookies = formatted
+  session.holdingsHtmlString = response
   return nil
 end
 
 -- ============================================================================
--- Login-Status-Erkennung
+-- Login-Status / Fehler-Erkennung
 -- ============================================================================
 
-function isLoggedInPage(html)
-  if not html then return false end
-  if html:match('id="TotalIndicativeValue"') then return true end
-  if html:match("My Holdings Summary") then return true end
-  if html:find("holdingssummary", 1, true) and html:match("BaseHoldingSummaryUC1") then
+function isLoggedInPage(content)
+  if not content then return false end
+  if content:match('id="TotalIndicativeValue"') then return true end
+  if content:match("My Holdings Summary") then return true end
+  if content:find("holdingssummary", 1, true) and content:match("BaseHoldingSummaryUC1") then
     return true
   end
   return false
 end
 
-function isMfaPage(html)
-  if not html then return false end
-  return (html:lower():find("authentication code", 1, true) ~= nil)
+function isMfaPage(content)
+  if not content then return false end
+  return content:lower():find("authentication code", 1, true) ~= nil
 end
 
-function extractLoginError(html)
-  if not html then return nil end
-  local err = html:match('class="[^"]*ErrorMessage[^"]*"[^>]*>%s*([^<]-)%s*<')
-              or html:match('id="[^"]*lblError[^"]*"[^>]*>%s*([^<]-)%s*<')
-              or html:match('id="[^"]*ErrorLabel[^"]*"[^>]*>%s*([^<]-)%s*<')
-  if err and err ~= "" then
-    err = trim(htmlDecode(err))
-    if err ~= "" then return err end
+function extractLoginError(htmlNode)
+  if not htmlNode then return nil end
+  local candidates = {
+    '//*[contains(@class, "ErrorMessage")]',
+    '//*[contains(@id, "lblError")]',
+    '//*[contains(@id, "ErrorLabel")]'
+  }
+  for _, xp in ipairs(candidates) do
+    local node = htmlNode:xpath(xp)
+    if node then
+      local text = trim(node:text() or "")
+      if text ~= "" then return text end
+    end
   end
   return nil
 end
 
-function findMfaFields(html)
-  if not html then return nil, nil end
-  -- OTP-Eingabefeld endet exakt auf "txtVerificationCode" / "VerificationCode"
-  -- (wichtig: Eingabefeld zuerst spezifisch matchen, BEVOR ähnliche Submit-Button-Namen wie "btnSubmitOtp" greifen)
-  local codeField = html:match('name="([^"]-txtVerificationCode)"')
-                   or html:match('name="([^"]-VerificationCode)"')
-                   or html:match('name="([^"]-txtOtp)"')
-                   or html:match('name="([^"]-AuthenticationCode)"')
-  -- Submit-Button: ASP.NET-Postback-Target (wird per __EVENTTARGET adressiert)
-  local submitField = html:match('name="([^"]-btnSubmitOtp)"')
-                     or html:match('name="([^"]-btnVerifyOtp)"')
-                     or html:match('name="([^"]-btnVerify)"')
-  return submitField, codeField
-end
-
 -- ============================================================================
--- ListAccounts: konsolidiertes Portfolio-Konto
+-- ListAccounts / RefreshAccount
 -- ============================================================================
 
 function ListAccounts(knownAccounts)
-  MM.printStatus("Shareview: Konten ermitteln...")
-  if not session.holdingsHtml then
-    session.holdingsHtml = requestHtml("GET", CONSTANTS.holdingsUrl)
+  if not session.holdingsHtmlString then
+    session.holdingsHtmlString = connection:get(CONSTANTS.holdingsUrl)
   end
-  if not session.holdingsHtml or not isLoggedInPage(session.holdingsHtml) then
+  if not session.holdingsHtmlString or not isLoggedInPage(session.holdingsHtmlString) then
     return "Holdings-Seite nicht zugänglich. Session abgelaufen?"
   end
-
-  local accounts = {
+  return {
     {
-      name = "Shareview Portfolio",
+      name          = "Shareview Portfolio",
       accountNumber = "shareview-portfolio",
-      portfolio = true,
-      currency = "GBP",
-      type = AccountTypePortfolio,
-      bankCode = "Shareview"
+      portfolio     = true,
+      currency      = "GBP",
+      type          = AccountTypePortfolio,
+      bankCode      = "Shareview"
     }
   }
-  return accounts
 end
 
--- ============================================================================
--- RefreshAccount: Holdings aus HTML extrahieren
--- ============================================================================
-
 function RefreshAccount(account, since)
-  MM.printStatus("Shareview: Portfolio aktualisieren...")
-  if not session.holdingsHtml then
-    session.holdingsHtml = requestHtml("GET", CONSTANTS.holdingsUrl)
+  if not session.holdingsHtmlString then
+    session.holdingsHtmlString = connection:get(CONSTANTS.holdingsUrl)
   end
-  if not session.holdingsHtml then
+  if not session.holdingsHtmlString then
     return "Holdings-Seite nicht erreichbar."
   end
 
-  local html = session.holdingsHtml
+  local html = session.holdingsHtmlString
   local securities = parseHoldings(html)
   local balance, balanceCurrency = parseTotalIndicativeValue(html)
 
   if not balance or balance == 0 then
-    -- Fallback: Summe aus Einzelpositionen bilden
     balance = 0
-    for _, sec in ipairs(securities) do
-      balance = balance + (sec.amount or 0)
-    end
+    for _, sec in ipairs(securities) do balance = balance + (sec.amount or 0) end
     balanceCurrency = balanceCurrency or "GBP"
   end
-
-  return {
-    balance = balance,
-    securities = securities
-  }
+  return { balance = balance, securities = securities }
 end
 
-function parseTotalIndicativeValue(html)
-  if not html then return nil, nil end
-  local block = html:match('id="TotalIndicativeValue"[^>]*>%s*<span[^>]*>([^<]+)<')
-  if not block then
-    block = html:match('id="TotalIndicativeValue".-currencyChange[^>]*>([^<]+)<')
-  end
+function parseTotalIndicativeValue(htmlString)
+  if not htmlString then return nil, nil end
+  local block = htmlString:match('id="TotalIndicativeValue"[^>]*>%s*<span[^>]*>([^<]+)<')
+                or htmlString:match('id="TotalIndicativeValue".-currencyChange[^>]*>([^<]+)<')
   if not block then return nil, nil end
   local amount, native = parseCurrencyValue(block)
-  return amount, native and (native == "GBX" and "GBP" or native) or "GBP"
+  return amount, normalizeCurrency(native)
 end
 
-function parseHoldings(html)
+function parseHoldings(htmlString)
   local securities = {}
-  if not html then return securities end
-
-  -- Alle <tr>-Zeilen mit summaryDataItemRow extrahieren
-  for row in html:gmatch('<tr[^>]*summaryDataItemRow[^>]*>(.-)</tr>') do
+  if not htmlString then return securities end
+  for row in htmlString:gmatch('<tr[^>]*summaryDataItemRow[^>]*>(.-)</tr>') do
     local sec = parseHoldingRow(row)
-    if sec then table.insert(securities, sec) end
+    if sec then securities[#securities + 1] = sec end
   end
   return securities
+end
+
+local function extractIsin(row)
+  -- Lua-Patterns kennen kein {n}; daher per Längen-/Format-Check validieren.
+  local candidate = row:match("externalid=([A-Z0-9]+)") or ""
+  if #candidate == 12 and candidate:match("^[A-Z][A-Z][A-Z0-9]+[0-9]$") then
+    return candidate
+  end
+  return ""
+end
+
+local function extractCurrencyCell(cell)
+  if not cell then return nil end
+  return cell:match('<span class="original">([^<]+)</span>')
+      or cell:match('currencyChange[^>]*>([^<]+)<span')
+      or cell:match('currencyChangeIgnoreNative[^>]*>([^<]+)<span')
 end
 
 function parseHoldingRow(row)
   if not row then return nil end
 
-  -- Name + Sub-Account-Beschreibung aus erstem <td headers="holding">
   local holdingCell = row:match('headers="holding"[^>]*>(.-)</td>') or ""
-  local name = holdingCell:match("<strong>%s*([^<]+)%s*</strong>") or ""
-  local subAccount = holdingCell:match("</strong>%s*<br/?>%s*([^<]+)")
-  if subAccount then subAccount = trim(htmlDecode(subAccount)) end
-  name = trim(htmlDecode(name))
+  local name = trim(htmlDecode(holdingCell:match("<strong>%s*([^<]+)%s*</strong>") or ""))
   if name == "" then return nil end
 
+  local subAccount = holdingCell:match("</strong>%s*<br/?>%s*([^<]+)")
+  if subAccount then subAccount = trim(htmlDecode(subAccount)) end
   local fullName = name
   if subAccount and subAccount ~= "" and not subAccount:match("Shareholder Ref") then
     fullName = name .. " (" .. subAccount .. ")"
   end
 
-  -- Shareholder Ref No → securityNumber
-  local shareholderRef = holdingCell:match("Shareholder Ref No:%s*([%w%-]+)") or ""
-  shareholderRef = trim(shareholderRef)
+  local shareholderRef = trim(holdingCell:match("Shareholder Ref No:%s*([%w%-]+)") or "")
 
-  -- ISIN aus Morningstar-URL extrahieren (sofern vorhanden).
-  -- Lua-Patterns kennen kein {n}, daher per Längenprüfung validieren.
-  local isinCandidate = row:match("externalid=([A-Z0-9]+)") or ""
-  local isin = ""
-  if #isinCandidate == 12 and isinCandidate:match("^[A-Z][A-Z][A-Z0-9]+[0-9]$") then
-    isin = isinCandidate
-  end
-
-  -- Quantity aus <bdo class="PrivacyAware">N</bdo>
   local quantityCell = row:match('headers="quantity"[^>]*>(.-)</td>') or ""
-  local quantityStr = quantityCell:match('<bdo[^>]*>%s*([%d%.,]+)%s*</bdo>')
-                     or stripTags(quantityCell)
-  quantityStr = (quantityStr or ""):gsub(",", "")
-  local quantity = tonumber(quantityStr) or 0
+  local quantityStr  = (quantityCell:match('<bdo[^>]*>%s*([%d%.,]+)%s*</bdo>') or stripTags(quantityCell) or ""):gsub(",", "")
+  local quantity     = tonumber(quantityStr) or 0
 
-  -- Preis aus headers="price" → currencyChange-Span (Format: "GBX|10.0000|...")
-  local priceCell = row:match('headers="price"[^>]*>(.-)</td>') or ""
-  local priceRaw = priceCell:match('<span class="original">([^<]+)</span>')
-                   or priceCell:match('currencyChange[^>]*>([^<]+)<span')
-                   or priceCell:match('currencyChangeIgnoreNative[^>]*>([^<]+)<span')
-  local pricePerShare, priceNative = parseCurrencyValue(priceRaw)
+  local priceCell = row:match('headers="price"[^>]*>(.-)</td>')
+  local pricePerShare, priceNative = parseCurrencyValue(extractCurrencyCell(priceCell))
 
-  -- Wert aus headers="value"
-  local valueCell = row:match('headers="value"[^>]*>(.-)</td>') or ""
-  local valueRaw = valueCell:match('<span class="original">([^<]+)</span>')
-                   or valueCell:match('currencyChange[^>]*>([^<]+)<span')
-                   or valueCell:match('currencyChangeIgnoreNative[^>]*>([^<]+)<span')
-  local amount, valueNative = parseCurrencyValue(valueRaw)
+  local valueCell = row:match('headers="value"[^>]*>(.-)</td>')
+  local amount, valueNative = parseCurrencyValue(extractCurrencyCell(valueCell))
 
   if not amount and pricePerShare and quantity > 0 then
     amount = pricePerShare * quantity
   end
 
-  -- GBX → GBP-Normalisierung erfolgt bereits in parseCurrencyValue
-  local currencyOfPrice = priceNative
-  if currencyOfPrice == "GBX" or currencyOfPrice == "GBp" then currencyOfPrice = "GBP" end
-  if not currencyOfPrice or currencyOfPrice == "" then currencyOfPrice = "GBP" end
-
-  local currencyOfAmount = valueNative
-  if currencyOfAmount == "GBX" or currencyOfAmount == "GBp" then currencyOfAmount = "GBP" end
-  if not currencyOfAmount or currencyOfAmount == "" then currencyOfAmount = "GBP" end
-
   return {
-    name = fullName,
-    isin = isin,
-    securityNumber = shareholderRef,
-    quantity = quantity,
-    price = pricePerShare or 0,
-    currencyOfPrice = currencyOfPrice,
-    amount = amount or 0,
-    currencyOfOriginalAmount = currencyOfAmount
+    name                     = fullName,
+    isin                     = extractIsin(row),
+    securityNumber           = shareholderRef,
+    quantity                 = quantity,
+    price                    = pricePerShare or 0,
+    currencyOfPrice          = normalizeCurrency(priceNative),
+    amount                   = amount or 0,
+    currencyOfOriginalAmount = normalizeCurrency(valueNative)
   }
 end
 
@@ -634,12 +481,11 @@ end
 -- ============================================================================
 
 function EndSession()
-  if session.cookies and session.cookies ~= "" then
-    pcall(function()
-      requestHtml("GET", CONSTANTS.logoutUrl)
-    end)
+  if connection then
+    pcall(function() connection:get(CONSTANTS.logoutUrl) end)
   end
   session = { cookies = "" }
+  connection = nil
 end
 
 -- SIGNATURE: <unsigned>
