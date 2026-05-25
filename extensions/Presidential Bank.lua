@@ -669,7 +669,7 @@ function loginWithImportedCookies(cookieString)
   session.cookieImportMode = true
 
   -- Test endpoint - use auth API like browser does
-  local testResponse, testStatus = connection:request("GET",
+  local testResponse = connection:request("GET",
     CONSTANTS.authApi .. "/user/authtoken",
     nil, nil, buildRequestHeaders())
 
@@ -724,30 +724,30 @@ function handleCookieImportStep(credentials)
   if session.rftoken then
     testUrl = testUrl .. "&rftoken=" .. MM.urlencode(session.rftoken)
   end
-  local testResponse, testStatus = connection:request("GET", testUrl, nil, nil, buildRequestHeaders())
+  local testResponse = connection:request("GET", testUrl, nil, nil, buildRequestHeaders())
 
-  -- Check for successful response (2xx status and valid data)
   if testResponse and (testResponse:match("accountsresponse") or testResponse:match("otherAccounts")) then
     MM.printStatus("Cookie import successful - API access verified")
     return nil
   end
 
-  -- If we got 403/401, the cookies are invalid
-  if testStatus and (testStatus:match("403") or testStatus:match("401")) then
-    return "Cookie import failed: Invalid or expired session (" .. testStatus .. "). Please login to Presidential Bank in your browser again, copy fresh cookies from DevTools → Network, and retry."
+  -- Classify failure from the response body (Connection:request returns
+  -- (content, charset, mimeType, filename, headers); MoneyMoney does NOT
+  -- surface the HTTP status code, so we have to inspect the body).
+  local body = testResponse and testResponse:lower() or ""
+  if body:find("forbidden") or body:find("unauthorized") or body:find("\"status\"%s*:%s*40") then
+    return "Cookie import failed: Invalid or expired session. Please login to Presidential Bank in your browser again, copy fresh cookies from DevTools → Network (including SESSION_TOKEN and rftoken), and retry."
   end
-
-  -- If we got 500, it might be a temporary server issue - allow retry
-  if testStatus and testStatus:match("500") then
+  if body:find("internal server error") or body:find("\"status\"%s*:%s*500") then
     session.waitingForCookieImport = true
     return {
       title = "Cookie Import - Server Error",
-      challenge = "The server returned a 500 Internal Server Error. This may be temporary.\n\nPlease try again with the same cookies, or get fresh cookies from your browser:",
+      challenge = "The server returned an internal error. This may be temporary.\n\nPlease try again with the same cookies, or get fresh cookies from your browser:",
       label = "Cookie string"
     }
   end
 
-  return "Cookie import failed. The session may be expired or the cookies are incomplete."
+  return "Cookie import failed. The session may be expired or the cookies are incomplete. Please login to Presidential Bank in your browser, copy fresh cookies from DevTools → Network (including SESSION_TOKEN and rftoken), and retry."
 end
 
 function hasValidSession()
