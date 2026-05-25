@@ -240,7 +240,7 @@ WebBanking {
   version = "1.0.0",
   url = "https://portfolio.shareview.co.uk",
   services = {"Shareview"},
-  description = "Equiniti Shareview Portfolio - Direct Login (Username|DOB + Password + MFA) und Cookie Import"
+  description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA) oder Cookie Import"
 }
 ```
 
@@ -252,35 +252,58 @@ WebBanking {
 
 ### `SupportsBank(protocol, bankCode)`
 
-- `true` für `ProtocolWebBanking` und `bankCode` **Shareview** oder **Equiniti Shareview**
+- `true` für `ProtocolWebBanking` und `bankCode == "Shareview"`
 
 ### `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
 
-Direct-Login mit Zwei-Faktor-Authentifizierung gemäß [API](https://moneymoney.app/api/webbanking/#anmeldung-mit-zwei-faktor-authentifizierung).
+Direct-Login mit Zwei-Faktor-Authentifizierung gemäß [API](https://moneymoney.app/api/webbanking/#anmeldung-mit-zwei-faktor-authentifizierung). Das Geburtsdatum wird entweder schon im Benutzernamen mitgegeben (Komfort-Pfad, einmalig im Keychain gespeichert) oder als eigener Multi-Step nachgefragt.
 
-| Schritt | Inhalt |
-|---------|--------|
-| 1 | Username + Geburtsdatum + Passwort **oder** `COOKIE:`-Import |
-| 2 | 6-stelliger Authentication Code aus Shareview-App / E-Mail |
+| Schritt | Inhalt | Bedingung |
+|---------|--------|-----------|
+| 1 | Username + Passwort (Standard-Dialog) **oder** `COOKIE:`-Import | immer |
+| 1a | Geburtsdatum (`TT.MM.JJJJ`) | nur wenn der Username **keinen** Pipe-Suffix enthält |
+| 2 | 6-stelliger Authentication Code aus Shareview-App / E-Mail | bei Direct-Login |
 
-**Username-Format mit Geburtsdatum:** `username|TT.MM.JJJJ`
+**Username-Eingabe — zwei Varianten:**
+
+| Variante | Username-Wert | Verhalten |
+|----------|---------------|-----------|
+| **Komfort (empfohlen)** | `max.mustermann\|01.01.1970` | Geburtsdatum wird aus dem Pipe-Suffix gelesen — kein extra Step. Geburtsdatum bleibt verschlüsselt im Keychain. |
+| **Multi-Step** | `max.mustermann` | MoneyMoney fragt das Geburtsdatum als separaten Schritt nach (Tipp im Challenge-Text: Pipe-Format dauerhaft speichern). Funktioniert **nur interaktiv**, nicht für automatische Background-Syncs. |
 
 | Feld | Beispiel |
 |------|----------|
-| `username` | `max.mustermann\|01.01.1970` |
+| `username` | `max.mustermann\|01.01.1970` (Komfort) oder `max.mustermann` (Multi-Step) |
 | `password` | Shareview-Passwort **oder** `COOKIE:FedAuth=…;ASP.NET_SessionId=…` |
 
-Hintergrund: Shareview verlangt Username, Passwort und Geburtsdatum (Tag, Monat, Jahr) auf der Login-Seite. Da MoneyMoney standardmäßig nur ein Username-Feld zeigt, wird das Geburtsdatum mit `|` an den Username angehängt und intern in die drei Dropdown-Felder (`drpDay`, `drpMonth`, `drpYear`) aufgeteilt.
+Hintergrund: Shareview verlangt Username, Passwort und Geburtsdatum (Tag, Monat, Jahr) auf der Login-Seite. Da MoneyMoney im Standard-Dialog nur Username und Passwort zeigt, wird das Geburtsdatum entweder via Pipe-Suffix im Username transportiert (statisches Datum → im Keychain speicherbar) oder als zusätzlicher interaktiver Step abgefragt. Intern wird es in die drei Dropdown-Felder (`drpDay`, `drpMonth`, `drpYear`) aufgeteilt.
+
+Der State zwischen den Steps wird im Modul-`session` gehalten (`awaitingDob`, `awaitingMfa`, `pendingUsername`, `pendingPassword`) und in `EndSession` immer komplett verworfen.
+
+#### Form-Handling (HTML/XPath-API)
+
+`Shareview.lua` nutzt MoneyMoneys integrierte HTML/XPath-API (`HTML(content)`, `:xpath(...)`, `:submit()`) und überlässt dem Parser das Einsammeln aller hidden Inputs (insb. `__VIEWSTATE`, `__EVENTVALIDATION`, `wresult`-SAML-Token). ASP.NET vergibt dynamische Control-IDs mit GUIDs, daher arbeiten alle Locator mit `contains(@id, "...")`-Substring-Matches auf den stabilen Suffixen:
+
+| Feld | XPath |
+|---|---|
+| Username | `//input[contains(@id, "UserLocate2UC1_rpt_ctl00_txtInput")]` |
+| Passwort | `//input[contains(@id, "UserLocate2UC1_rpt_ctl02_txtInput")]` |
+| DOB Tag/Monat/Jahr | `//select[contains(@id, "drpDay\|drpMonth\|drpYear")]/option[@value="…"]` |
+| Locate-Button (`__EVENTTARGET`) | `//input[contains(@id, "btnLocate")]` → `:attr("name")` |
+| OTP-Eingabe | `//input[contains(@id, "txtVerificationCode")]` |
+| OTP-Submit | `//input[contains(@id, "btnSubmitOtp")]` → `:attr("name")` |
+| ASP.NET-Form | `//form[@name="aspnetForm"]` (id ist dynamisch, z. B. `ctl31`) |
+| Federation-Form | `//form[@name="hiddenform"]` |
 
 #### Federation-Flow (Step 2 → Holdings)
 
-Nach erfolgreicher OTP-Validierung antwortet Shareview mit einer ASP.NET-`<form name="hiddenform">`-Auto-Post-Page, die im Browser per JavaScript an die ADFS-Endpoints weitergeleitet wird (WS-Federation/SAML 1.1):
+Nach erfolgreicher OTP-Validierung antwortet Shareview mit einer `<form name="hiddenform">`-Auto-Post-Page, die im Browser per JavaScript an die ADFS-Endpoints weitergeleitet wird (WS-Federation/SAML 1.1):
 
 1. `POST https://www.equiniti.com/adfs/ls/` mit `wa`, `wresult` (SAML-Token), `wctx`
 2. ADFS antwortet mit weiterer Federation-Form an `https://portfolio.shareview.co.uk/_trust/`
 3. Erst danach ist der `FedAuth`-Cookie gesetzt und `holdingssummary.aspx` zugänglich.
 
-Da die Lua-`Connection` keine HTML-Form-Auto-Submits ausführt, fährt `Shareview.lua` diese Hops in `followAutoPostForms()` manuell nach (mit Heuristik auf `<title>Working...</title>` bzw. `name="hiddenform"`). Das `wresult`-XML enthält literale `>` und `/>` (HTML5-konformes Attribut), daher werden Form-Felder nicht über `<input ... />`-Tag-Boundaries, sondern direkt per `name="X" value="..." />`-Pattern extrahiert.
+Da die Lua-`Connection` keine HTML-Form-Auto-Submits ausführt, fährt `followFederationHops()` diese Hops manuell nach (Heuristik auf `<title>Working...</title>` bzw. `name="hiddenform"`, max. 5 Hops). Das `:submit()` der HTML/XPath-API kümmert sich um literale `>`/`/>`-Zeichen im SAML-`wresult` zuverlässig.
 
 #### Cookie-Import (empfohlen bei wiederholten MFA-Problemen)
 
@@ -334,63 +357,15 @@ Optionaler GET auf `Logoff.aspx`; lokale Session-Cookies werden zurückgesetzt.
 
 ---
 
-## Equiniti Shareview Portfolio (XPath-Variante, experimentell)
-
-**Datei:** `extensions/Shareview-XPath.lua`
-**Service:** `Shareview-XPath` (parallel zu `Shareview` installierbar)
-
-Funktionsidentische Variante zu `Shareview.lua`, nutzt aber MoneyMoneys integrierte HTML/XPath-API (`HTML(content)`, `:xpath(...)`, `:submit()`) anstelle von manuellem Lua-Pattern-Parsing für Form-Handling. Inspiriert vom EquatePlus-Plugin ([neatc0der/equateplus-moneymoney](https://github.com/neatc0der/equateplus-moneymoney)), das das gleiche Equiniti-Backbone, aber unterschiedliche Endpunkte nutzt.
-
-### Vorteile gegenüber `Shareview.lua`
-
-| Bereich | Pattern-Variante (`Shareview.lua`) | XPath-Variante (`Shareview-XPath.lua`) |
-|---|---|---|
-| ASP.NET-Hidden-Inputs | manuell via `<input[^>]+>`-Pattern eingesammelt | automatisch durch `:submit()` |
-| SAML-`wresult`-Wert (mit literalen `>`/`/>`) | spezialisiertes `name="X" value="(.-)" />`-Pattern | echter HTML-Parser, problemlos |
-| MFA-Feld-Locator | Heuristik (`btnSubmitOtp`/`txtVerificationCode`) | XPath `contains(@id, "txtVerificationCode")` |
-| Federation-Auto-Post | manuelle `followAutoPostForms()`-Schleife | `:submit()` der `<form name="hiddenform">` |
-| Code-Umfang | ~640 Zeilen | ~550 Zeilen |
-
-### Locator-Strategie
-
-ASP.NET vergibt dynamische Control-IDs mit GUIDs (`ctl00$SPWebPartManager1$g_82244877_…$UserLocate2UC1$rpt$ctl00$txtInput`). Statt diese hart zu codieren, arbeitet `Shareview-XPath.lua` mit `contains(@id, "...")`-Substring-Matches:
-
-| Feld | XPath |
-|---|---|
-| Username | `//input[contains(@id, "UserLocate2UC1_rpt_ctl00_txtInput")]` |
-| Passwort | `//input[contains(@id, "UserLocate2UC1_rpt_ctl02_txtInput")]` |
-| DOB Tag/Monat/Jahr | `//select[contains(@id, "drpDay")]/option[@value="…"]` etc. |
-| Locate-Button (`__EVENTTARGET`) | `//input[contains(@id, "btnLocate")]` → `:attr("name")` |
-| OTP-Eingabe | `//input[contains(@id, "txtVerificationCode")]` |
-| OTP-Submit | `//input[contains(@id, "btnSubmitOtp")]` → `:attr("name")` |
-| Federation-Form | `//form[@name="hiddenform"]` |
-
-### Verifikation
-
-**Wichtig:** Diese Variante ist nur in der MoneyMoney-Runtime verifizierbar. Der lokale Test-Harness (`test_shareview_live.lua`) basiert auf `curl` und kann die `HTML()`/`xpath()`/`:submit()`-API nicht stubben. Daher:
-
-1. `Shareview-XPath.lua` ins MoneyMoney-Extensions-Verzeichnis kopieren.
-2. In MoneyMoney *Konto hinzufügen → Wertpapierdepot → Service "Shareview-XPath"*.
-3. Username `username|TT.MM.JJJJ`, Passwort wie gewohnt.
-4. Bei Fehlern: Console-Log in MoneyMoney prüfen, ggf. `XPath`-Locator anpassen (ASP.NET-Control-IDs können sich ändern).
-
-Die robuste Pattern-Variante (`Shareview.lua`) bleibt als Fallback unverändert verfügbar und ist live nachweislich funktionsfähig.
-
-### Holdings-Parsing
-
-Das Parsen der `holdingssummary.aspx`-Tabelle (HTML-Patterns) ist **identisch** zur Pattern-Variante — die Holdings-Page ist stabil und live verifiziert; ein zusätzlicher XPath-Refactor brächte hier keinen Mehrwert.
-
----
-
 ## Entwicklung
 
-Lokaler Test BoA:
+Lokale Helper-Tests (Shareview):
 
 ```bash
-lua test_boa.lua
+lua tests/test_shareview.lua
 ```
 
-Signatur: BoA-Extension ist signiert (`SIGNATURE:` am Dateiende). Für eigene Builds Signaturprüfung in MoneyMoney deaktivieren oder neu signieren lassen.
+Signatur: Die Extensions hier sind unsigniert (`-- SIGNATURE: <unsigned>` am Dateiende). In MoneyMoney die Signaturprüfung für Extensions deaktivieren oder die Datei selbst signieren lassen.
 
 API-Vorlage (minimal):
 

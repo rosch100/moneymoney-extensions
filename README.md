@@ -29,7 +29,6 @@ Inoffizielle [MoneyMoney](https://moneymoney.app)-Extensions für US- und UK-Bro
 | `extensions/Fidelity.lua` | Fidelity | Cookie-Import |
 | `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
 | `extensions/Shareview.lua` | Equiniti Shareview Portfolio | Direct-Login + MFA, Cookie-Import |
-| `extensions/Shareview-XPath.lua` | Equiniti Shareview Portfolio (XPath-Variante) | Wie oben, aber HTML/XPath/`:submit()` statt Pattern-Parsing — experimentell |
 
 ## Installation
 
@@ -98,11 +97,14 @@ Alternative zum Cookie-Import — Login direkt aus MoneyMoney:
 
 | Feld | Format |
 |------|--------|
-| **Benutzername** | `username\|TT.MM.JJJJ` (Login-Username, Pipe, Geburtsdatum) |
+| **Benutzername** | Shareview-Login-Username, optional mit Geburtsdatum: `username\|TT.MM.JJJJ` |
 | **Passwort** | Shareview-Passwort |
+| **Geburtsdatum** | Wird nachgefragt, wenn nicht im Benutzernamen enthalten (`TT.MM.JJJJ`) |
 | **MFA** | 6-stelliger Authentication Code (von MoneyMoney abgefragt) |
 
-Beispiel-Benutzername: `max.mustermann|01.01.1970`
+**Tipp:** Das Geburtsdatum dauerhaft als Pipe-Suffix im Benutzernamen speichern (z. B. `max.mustermann|01.01.1970`) — Shareview erfragt es sonst bei jedem Login als separaten Schritt. Mit Pipe-Suffix wird das Geburtsdatum verschlüsselt im macOS-Keychain abgelegt.
+
+**Automatische Syncs (nicht-interaktiv):** Funktionieren nur mit Pipe-Suffix-Variante, weil die Geburtsdatum-Abfrage einen interaktiven Dialog voraussetzt.
 
 Bei wiederholten Fehlversuchen: Cookie-Import nutzen (siehe oben). Shareview blockiert Konten nach mehrfachen MFA-Fehlern temporär.
 
