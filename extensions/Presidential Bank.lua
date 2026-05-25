@@ -5,10 +5,10 @@
 -- API: https://moneymoney.app/api/webbanking/
 --
 
-WebBanking {
-  version = "1.0.0",
-  url = "https://www.presidentialpcbanking.com",
-  services = {"Presidential Bank"},
+WebBanking{
+  version     = 1.00,
+  url         = "https://www.presidentialpcbanking.com",
+  services    = {"Presidential Bank"},
   description = "Presidential Bank - Supports Normal Login (MFA) and Cookie Import Mode"
 }
 
@@ -851,5 +851,3 @@ function EndSession()
   session = {}
   MM.printStatus("Logged out")
 end
-
--- SIGNATURE: <unsigned>
