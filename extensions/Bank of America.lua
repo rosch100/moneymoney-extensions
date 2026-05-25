@@ -68,15 +68,19 @@ local function syncCookieHeader(requestHeaders)
   requestHeaders["Cookie"] = session.cookies
 end
 
+-- connection:request liefert (content, charset, mimeType, filename, headers).
+-- Wir verwenden nur content + mimeType (Letzteres fuer PDF-Erkennung in
+-- GetStatement); der charset-Wert (z.B. "utf-8") wird mit `_` verworfen,
+-- damit Caller ihn nicht versehentlich als HTTP-Status interpretieren.
 local function performGet(url, requestHeaders, refererUrl)
   if refererUrl then
     requestHeaders["Referer"] = refererUrl
   end
   syncCookieHeader(requestHeaders)
-  local response, status, mimeType = connection:request("GET", url, nil, nil, requestHeaders)
+  local response, _, mimeType = connection:request("GET", url, nil, nil, requestHeaders)
   refreshSessionCookies()
   syncCookieHeader(requestHeaders)
-  return response, status, mimeType
+  return response, mimeType
 end
 
 local function performPost(url, postData, contentType, requestHeaders, refererUrl)
@@ -85,10 +89,10 @@ local function performPost(url, postData, contentType, requestHeaders, refererUr
   end
   syncCookieHeader(requestHeaders)
   local body = postData or ""
-  local response, status, mimeType = connection:request("POST", url, body, contentType, requestHeaders)
+  local response, _, mimeType = connection:request("POST", url, body, contentType, requestHeaders)
   refreshSessionCookies()
   syncCookieHeader(requestHeaders)
-  return response, status, mimeType
+  return response, mimeType
 end
 
 local function buildRequestHeaders(refererUrl)
@@ -516,11 +520,6 @@ function loginWithImportedCookies(cookieString)
     end
   end
 
-  if testStatus and (testStatus:match("403") or testStatus:match("401")) then
-    return "SESSION DENIED (HTTP " .. testStatus .. ").\n\n" ..
-           "Cookies are invalid or expired. Please copy FRESH cookies from browser after logging in."
-  end
-
   return nil
 end
 
@@ -533,14 +532,14 @@ function ListAccounts(knownAccounts)
   local accounts = {}
 
   local requestHeaders = buildRequestHeaders(CONSTANTS.baseUrl .. "/")
-  local response, status = performGet(
+  local response = performGet(
     CONSTANTS.baseUrl .. "/myaccounts/details/card/account-details.go",
     requestHeaders,
     CONSTANTS.baseUrl .. "/"
   )
 
   if not response then
-    return "Failed to fetch accounts: " .. tostring(status)
+    return "Failed to fetch accounts (no response from server). Cookies may be expired - please re-import fresh cookies."
   end
 
   rememberStatementPageUrl(response, session.adxToken)
@@ -1192,14 +1191,14 @@ local function downloadStatementPdf(docId, adxToken)
     "&request_locale=en-US"
 
   local pdfHeaders = buildPdfGetHeaders(statementReferer)
-  local response, status, mimeType = performGet(downloadUrl, pdfHeaders, statementReferer)
+  local response, mimeType = performGet(downloadUrl, pdfHeaders, statementReferer)
 
   if response and (response:sub(1, 4) == "%PDF" or (mimeType and mimeType:lower():find("pdf"))) then
     return response, nil
   end
 
   local postData = '{"adx":"' .. adxToken .. '","docId":"' .. docId .. '","docCategoryId":"DISPFLD001"}'
-  response, status, mimeType = performPost(
+  response, mimeType = performPost(
     CONSTANTS.baseUrl .. "/ogateway/dsviewdocuments/omni/statements/v1/retrieveDocument",
     postData,
     "application/json; charset=UTF-8",
@@ -1224,7 +1223,10 @@ local function downloadStatementPdf(docId, adxToken)
     return nil, "server returned HTML instead of PDF"
   end
 
-  return nil, "unexpected response (status " .. tostring(status) .. ")"
+  if mimeType then
+    return nil, "unexpected response (mimeType " .. tostring(mimeType) .. ")"
+  end
+  return nil, "no response from server"
 end
 
 function FetchStatements(accounts, knownIdentifiers)
