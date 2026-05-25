@@ -5,10 +5,10 @@
 -- API: https://moneymoney.app/api/webbanking/
 --
 
-WebBanking {
-  version = "1.0.0",
-  url = "https://secure.bankofamerica.com",
-  services = {"Bank of America"},
+WebBanking{
+  version     = 1.00,
+  url         = "https://secure.bankofamerica.com",
+  services    = {"Bank of America"},
   description = "Bank of America - Cookie Import mode (workaround for RSA encryption)"
 }
 
@@ -1302,5 +1302,3 @@ function DownloadStatement(account, statement)
   end
   return GetStatement(account, statementId)
 end
-
--- SIGNATURE: <unsigned>
