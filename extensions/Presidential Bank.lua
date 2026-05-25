@@ -852,4 +852,4 @@ function EndSession()
   MM.printStatus("Logged out")
 end
 
--- SIGNATURE: MC4CFQCbwcy5iiv/AJGS3E85IYCIXkbltgIVAIHAMbH4w6H5GLVc1KNxCJkhTYyG
+-- SIGNATURE: <unsigned>
