@@ -1,31 +1,19 @@
+.DS_Store
+
+# Lua-Build-Tooling (lokal, nicht ins Repo)
 /luarocks
 /lua
-/lua_modules
-/.luarocks
-/.vscode
-/~/Library
-/Presidential/
+/lua_modules/
+/.luarocks/
+/.vscode/
+/moneymoney-dev-1.rockspec
+
+# Sensitive Daten / HAR-Exporte
 *.har
 *_cookies.txt
-fidelity_cookies.txt
-lua_modules/
+
+# Nur Dateien aus extensions/, scripts/, docs/ und tests/ ins Repo,
+# Lua-Dateien im Root ausschließen (Entwicklungs-Scratch).
 /*.lua
 !/extensions/*.lua
-
-RSACrypto.lua
-boa-encrypt.py
-boa-encrypt.sh
-test_boa.lua
-moneymoney-dev-1.rockspec
-
-# Alte/duplizierte Dateien (nicht im Repo)
-Bank of America liest Daten.lua
-Fidelity Cookie.lua
-Presidential Bank 2FA*.lua
-fidelity-cookie-exporter-*.user.js
-fidelity-exporter-*.user.js
-extract_*.py
-MoneyMoney-Feature-Request*.md
-Presidential-Bank-*.md
-BOOKMARKLET.md
-FIDELITY_COOKIE_EXPORTER.md
+!/tests/*.lua
