@@ -152,15 +152,16 @@ WebBanking{
 
 ### `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
 
-Zwei-Faktor-Flow gemäß [Anmeldung mit Zwei-Faktor-Authentifizierung](https://moneymoney.app/api/webbanking/#anmeldung-mit-zwei-faktor-authentifizierung).
+Zwei-Faktor-Flow gemäß [Anmeldung mit Zwei-Faktor-Authentifizierung](https://moneymoney.app/api/webbanking/#anmeldung-mit-zwei-faktor-authentifizierung). Folge-Steps werden state-basiert dispatcht (`waitingForMethodSelection`, `waitingForMfaCode`, `waitingForCookieImport`), damit Retry-Challenges unabhängig vom `step`-Zähler im richtigen Handler landen.
 
-| Schritt | Inhalt |
+| Eingabe | Inhalt |
 |---------|--------|
-| 1 | Login oder `COOKIE:`; bei MFA Challenge-Objekt (`title`, `challenge`, `label`) |
-| 2 | MFA-Code bzw. Methodenwahl |
-| 3 | Cookie-Import-Fallback, falls `rftoken` nach MFA fehlt |
+| Username + Passwort | initialer POST `external-login`, danach `login/redirect` |
+| Passwort `COOKIE:…` | überspringt MFA, übernimmt `SESSION_TOKEN` und `rftoken` direkt |
+| Methodenwahl | Auswahl aus `mfaMethods` (TOTP, SMS, E-Mail, Voice). Ungültige Auswahl → Retry-Challenge, State bleibt erhalten |
+| MFA-Code | POST `mfa/submit`. Abgelehnter Code → Retry-Challenge mit aktualisiertem CSRF-Token, kein Full-Login-Restart |
 
-MFA-Login scheitert in MoneyMoney häufig, weil der HttpOnly-`rftoken` nicht in die Engine übernommen wird. Cookie-Import (Passwort `COOKIE:…`) ist der empfohlene Weg und benötigt u. a. `SESSION_TOKEN` und `rftoken`.
+Der MFA-Submit selbst funktioniert. Das anschließende `finalizeLogin` blockiert aktuell, weil der Bank-Server `rftoken` als HttpOnly setzt und MoneyMoney es daher nicht an die Extension durchreicht; ohne `rftoken` schlagen die nachgelagerten REST-Calls fehl. Solange das so bleibt, ist Cookie-Import (Passwort `COOKIE:SESSION_TOKEN=…;rftoken=…`) der zuverlässige Weg. Sobald `rftoken` zugänglich wird, läuft der MFA-Login ohne Codeänderung bis zum Ende durch.
 
 ### `ListAccounts(knownAccounts)`
 
@@ -206,24 +207,20 @@ WebBanking{
 
 ### `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
 
-Zwei-Faktor-Flow mit zusätzlichem Geburtsdatum-Step, falls dieses nicht im Benutzernamen mitgegeben wurde.
+Zwei-Faktor-Flow mit zusätzlichem Geburtsdatum-Step, falls dieses nicht im Benutzernamen mitgegeben wurde. Folge-Steps werden state-basiert dispatcht (`awaitingDob`, `awaitingMfa`).
 
 | Schritt | Inhalt | Bedingung |
 |---------|--------|-----------|
 | 1  | Username + Passwort | immer |
 | 1a | Geburtsdatum (`TT.MM.JJJJ`) | nur wenn der Username keinen `\|TT.MM.JJJJ`-Suffix enthält |
-| 2  | 6-stelliger MFA-Code | immer |
+| 2  | 6-stelliger MFA-Code | immer; bei Reject wird die MFA-Seite mit frischem ASP.NET-`VIEWSTATE` als Basis für den nächsten Versuch behalten und nur der Code neu abgefragt |
 
 #### Username-Eingabe
 
 | Variante | Wert | Verhalten |
 |----------|------|-----------|
-| Komfort | `max.mustermann\|01.01.1970` | Geburtsdatum wird aus dem Pipe-Suffix gelesen, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
+| Komfort | `max.mustermann\|01.01.1970` | Geburtsdatum aus Pipe-Suffix, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
 | Multi-Step | `max.mustermann` | MoneyMoney fragt das Geburtsdatum interaktiv nach. Funktioniert **nicht** für nicht-interaktive Background-Syncs. |
-
-Shareview erwartet Username, Passwort und Geburtsdatum (Tag, Monat, Jahr) auf der Login-Seite. Da MoneyMoneys Standard-Dialog nur Username und Passwort kennt, wird das Geburtsdatum entweder als Pipe-Suffix im Username oder als zusätzlicher interaktiver Step übermittelt.
-
-State zwischen den Steps wird im Modul-`session` gehalten (`awaitingDob`, `awaitingMfa`, `pendingUsername`, `pendingPassword`) und in `EndSession` zurückgesetzt.
 
 ### `ListAccounts(knownAccounts)`
 
@@ -260,7 +257,7 @@ Optionaler GET auf `Logoff.aspx`; lokale Session-Cookies werden zurückgesetzt.
 ### Bekannte Einschränkungen
 
 - Keine Transaktionen / Dividenden — nur aktuelles Portfolio.
-- Drei aufeinanderfolgende falsche MFA-Codes sperren das Konto temporär.
+- Drei aufeinanderfolgende falsche MFA-Codes sperren das Konto bei Shareview temporär.
 - Nur GBP-Anzeige live verifiziert.
 
 ---
@@ -273,18 +270,4 @@ Lokale Helper-Tests (Shareview):
 lua tests/test_shareview.lua
 ```
 
-Signatur: Die Extensions hier sind unsigniert (`-- SIGNATURE: <unsigned>` am Dateiende). In MoneyMoney die Signaturprüfung für Extensions deaktivieren.
-
-Minimal-Vorlage für neue Extensions:
-
-```lua
-WebBanking{ version = 1.0, url = "…", services = {"…"}, description = "…" }
-
-function SupportsBank(protocol, bankCode) … end
-function InitializeSession(…) … end
-function ListAccounts(knownAccounts) … end
-function RefreshAccount(account, since) … end
-function EndSession() … end
-```
-
-Siehe [Vorlage in der offiziellen Doku](https://moneymoney.app/api/webbanking/#vorlage).
+Alle Extensions hier sind unsigniert. In MoneyMoney die Signaturprüfung für Extensions deaktivieren.

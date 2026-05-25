@@ -9,7 +9,7 @@ WebBanking{
   version     = 1.00,
   url         = "https://secure.bankofamerica.com",
   services    = {"Bank of America"},
-  description = "Bank of America - Cookie Import mode (workaround for RSA encryption)"
+  description = "Bank of America - Cookie Import"
 }
 
 local CONSTANTS = {

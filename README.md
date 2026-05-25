@@ -11,7 +11,9 @@ Inoffizielle Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 | `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
 | `extensions/Shareview.lua` | Equiniti Shareview Portfolio (UK) | Direct-Login (Username + Passwort + Geburtsdatum + MFA) |
 
-Die US-Banken erfordern Cookie-Import, weil ihr Web-Login auf clientseitige Verschlüsselung (BoA), Bot-Schutz (Fidelity) oder HttpOnly-Cookies nach MFA (Presidential) angewiesen ist — Mechanismen, die in der MoneyMoney-Lua-Engine ohne Browser-Runtime nicht abbildbar sind. Shareview-Login funktioniert direkt aus MoneyMoney.
+Cookie-Import ist bei den US-Banken nötig, weil ihr Web-Login auf clientseitige RSA-Verschlüsselung (BoA), Akamai-Bot-Schutz (Fidelity) oder HttpOnly-Cookies nach MFA (Presidential) angewiesen ist — Mechanismen, die ohne Browser-Runtime in der Lua-Engine nicht nachbildbar sind. Shareview funktioniert direkt aus MoneyMoney heraus.
+
+Für Presidential ist der MFA-Code-Flow vollständig implementiert (inkl. Retry bei falscher Eingabe). Der Login schließt aktuell mit dem Hinweis auf Cookie-Import ab, weil MoneyMoney das nach MFA gesetzte HttpOnly-Cookie `rftoken` nicht an die Extension durchreicht; sobald sich das ändert, funktioniert MFA ohne weitere Code-Änderung.
 
 ## Installation
 
@@ -29,6 +31,8 @@ Die US-Banken erfordern Cookie-Import, weil ihr Web-Login auf clientseitige Vers
 | MFA-Code | 6-stellig aus Shareview-App oder E-Mail (von MoneyMoney abgefragt) |
 
 Mit Pipe-Suffix (`name|01.01.1970`) speichert MoneyMoney das Geburtsdatum im Keychain. Nur diese Variante funktioniert für automatische Background-Syncs; ohne Pipe-Suffix fragt MoneyMoney das Geburtsdatum bei jedem Login interaktiv ab.
+
+Bei falsch eingegebenem MFA-Code fragt MoneyMoney nur den Code erneut ab — Benutzername, Passwort und Geburtsdatum bleiben erhalten. Drei aufeinanderfolgende Fehleingaben sperren das Konto bei Shareview temporär.
 
 ## Cookie-Import (BoA, Fidelity, Presidential)
 

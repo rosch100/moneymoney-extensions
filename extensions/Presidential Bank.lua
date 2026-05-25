@@ -9,7 +9,7 @@ WebBanking{
   version     = 1.00,
   url         = "https://www.presidentialpcbanking.com",
   services    = {"Presidential Bank"},
-  description = "Presidential Bank - Supports Normal Login (MFA) and Cookie Import Mode"
+  description = "Presidential Bank - MFA and Cookie Import"
 }
 
 local CONSTANTS = {

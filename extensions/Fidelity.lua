@@ -9,7 +9,7 @@ WebBanking{
   version     = 1.00,
   url         = "https://www.fidelity.com",
   services    = {"Fidelity"},
-  description = "Fidelity Investments - GraphQL API with Cookie Import support"
+  description = "Fidelity Investments - GraphQL, Cookie Import"
 }
 
 local CONSTANTS = {
