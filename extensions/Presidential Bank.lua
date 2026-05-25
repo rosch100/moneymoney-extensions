@@ -118,13 +118,13 @@ function handleLoginStep1(credentials)
     session.cookies = newCookies
   end
 
-  -- Check if we have the rftoken cookie (HttpOnly - will be empty)
-  -- This is expected to fail - rftoken is HttpOnly and not accessible
-  if not session.cookies or not session.cookies:match("rftoken") then
-    MM.printStatus("Note: rftoken (HttpOnly cookie) is not accessible. MFA flow will fail after code entry.")
-    MM.printStatus("WORKAROUND: Use Cookie Import Mode instead.")
-  end
-
+  -- Hinweis: rftoken wird vom Server als HttpOnly gesetzt und ist daher
+  -- ueber connection:getCookies() nicht sichtbar. Solange das so bleibt,
+  -- bricht finalizeLogin am Ende mit Cookie-Import-Workaround ab; der
+  -- MFA-Flow selbst (Methoden-Auswahl + Code-Eingabe + Submit) funktioniert
+  -- davon unberuehrt. Sobald rftoken zugaenglich ist (Server-Aenderung oder
+  -- MoneyMoney reicht HttpOnly-Cookies durch), laeuft der Login automatisch
+  -- bis zum Ende ohne Code-Aenderung durch.
   return getMfaConfig()
 end
 
@@ -428,11 +428,13 @@ function finalizeLogin()
     return LoginFailed
   end
 
-  -- Check if we have rftoken (required for API access)
+  -- rftoken ist fuer alle nachfolgenden API-Calls noetig. Solange der Bank-
+  -- Server es als HttpOnly setzt, ist es ueber connection:getCookies() nicht
+  -- sichtbar -- die MFA-Validierung war dann erfolgreich, aber die Extension
+  -- kann die Folge-Calls nicht authentifizieren. Sobald rftoken zugaenglich
+  -- ist, faellt dieser Block weg und der Login schliesst ohne Workaround ab.
   if not extractCookieValue(session.cookies, "rftoken") then
-    -- WORKAROUND: After MFA, the bank creates a new session with HttpOnly cookies
-    -- that we cannot access. Inform user about Cookie Import Mode.
-    return "Login successful, but HttpOnly cookie (rftoken) is required for API access.\n\nWORKAROUND:\n1. Login in your browser\n2. Copy cookies from DevTools → Network\n3. Use: COOKIE:SESSION_TOKEN=...;rftoken=..."
+    return "MFA erfolgreich, aber rftoken (HttpOnly) nicht zugaenglich.\n\nWorkaround Cookie-Import:\n1. Im Browser bei Presidential Bank einloggen.\n2. In DevTools -> Network die Cookies inklusive SESSION_TOKEN und rftoken kopieren.\n3. Im Passwortfeld eintragen: COOKIE:SESSION_TOKEN=...;rftoken=..."
   end
 
   MM.printStatus("Login successful - SESSION_TOKEN and rftoken received")
