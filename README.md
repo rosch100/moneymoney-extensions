@@ -12,7 +12,7 @@ Inoffizielle Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 | `extensions/Shareview.lua` | Equiniti Shareview Portfolio (UK) | Direct-Login (Username + Passwort + Geburtsdatum + MFA) |
 | `extensions/MLP Versicherungen.lua` | MLP Versicherungen | Cookie-Import (Login-API erfordert JOSE/JWE-Verschlüsselung) |
 
-Cookie-Import ist bei den US-Banken und MLP nötig, weil ihr Web-Login auf clientseitige RSA-Verschlüsselung (BoA), Akamai-Bot-Schutz (Fidelity), HttpOnly-Cookies nach MFA (Presidential) oder JOSE/JWE-Verschlüsselung (MLP) angewiesen ist — Mechanismen, die ohne Browser-Runtime in der Lua-Engine nicht nachbildbar sind. Shareview funktioniert direkt aus MoneyMoney heraus mit MFA.
+Cookie-Import ist bei den US-Banken und MLP erforderlich, da deren Web-Login Mechanismen nutzt (RSA-Verschlüsselung, Akamai-Bot-Schutz, JOSE/JWE), die in der Lua-Engine ohne Browser-Runtime nicht nachgebildet werden können. Shareview unterstützt Direct-Login mit MFA.
 
 ## Installation
 
@@ -44,7 +44,7 @@ Bei falsch eingegebenem MFA-Code fragt MoneyMoney nur den Code erneut ab — Ben
 
 **Hinweis:** Die MLP-Login-API erwartet Credentials im **JOSE/JWE-Format** (RSA-OAEP-512 mit A256GCM). Diese clientseitige Verschlüsselung ist in Lua nicht nachbildbar. Daher wird **Cookie-Import empfohlen**.
 
-**Benötigte Cookies:** `VUSESSIONID` (von `vue.mlp.de`), `BIGipServervue.mlp.de`, optional `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION` (für Consent)
+**Benötigte Cookies:** `VUSESSIONID` (von `vue.mlp.de`), `BIGipServervue.mlp.de`. Optional für Sitzungserneuerung: `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION`.
 
 ## Cookie-Import (BoA, Fidelity, Presidential, MLP)
 
@@ -76,72 +76,55 @@ In Tampermonkey: **Erweitert → Sicherheit → Cookie-Zugriff: Alle**.
    - Presidential: `www.presidentialpcbanking.com`
 3. **Alt+C** → Cookies kopieren → in MoneyMoney als Passwort einfügen.
 
-### Safari und Fallback
+### HAR-Export & Python-Skripte (alle Browser)
 
-| Methode | Browser |
-|---------|---------|
-| HAR-Export + `scripts/extract-<bank>-cookies.py` | alle |
-| [Get cookies.txt LOCALLY](https://github.com/kairi003/Get-cookies.txt-LOCALLY) | Chrome, Firefox |
-| [crul](https://github.com/KieranHunt/crul) | Chrome, Firefox, Safari |
-| DevTools → Network → Request Header `Cookie` | alle |
+Falls Tampermonkey nicht verfügbar ist (z. B. in Safari) oder nicht alle Cookies erfasst, können die Cookies aus einer HAR-Datei (HTTP Archive) extrahiert werden.
 
-HAR-Variante:
+1.  Im Browser bei der Bank anmelden.
+2.  **Wichtig:** Die Seite mit den Kontodaten bzw. der Vertragsübersicht öffnen.
+3.  DevTools öffnen (**F12** oder **Cmd+Alt+I**) → Tab **Network**.
+4.  Seite neu laden (optional, um alle Cookies im Flow zu sehen).
+5.  Rechtsklick in die Liste der Netzwerkanfragen → **Save all as HAR**.
+6.  Passendes Skript aus dem `scripts/`-Ordner ausführen:
 
-```bash
-python3 scripts/extract-boa-cookies.py export.har
-python3 scripts/extract-fidelity-cookies.py export.har
-python3 scripts/extract-presidential-cookies.py export.har
-python3 scripts/extract-mlp-cookies.py export.har
-```
+| Bank / Service | Befehl |
+|----------------|--------|
+| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` |
+| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` |
+| Presidential Bank | `python3 scripts/extract-presidential-cookies.py export.har` |
+| MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` |
+| Shareview (Fallback) | `python3 scripts/extract-shareview-cookies.py export.har` |
+
+Das Skript gibt den fertigen `COOKIE:...`-String aus und kopiert ihn (unter macOS) automatisch in die Zwischenablage. Diesen Wert in MoneyMoney als Passwort einfügen.
 
 Cookies nach dem Login zeitnah exportieren — die Session läuft sonst ab.
 
 ### MLP Versicherungen
 
-**Hinweis:** Diese Extension unterstützt nur **Versicherungsverträge** (Lebensversicherung, BU, etc.) aus dem MLP Kundenportal. Bank-Produkte (Konten, Depots) werden über separate Schnittstellen abgedeckt.
+**Hinweis:** Diese Extension unterstützt ausschließlich **Versicherungsverträge**. Bank-Produkte werden separat abgedeckt.
 
-Die MLP-API erfordert **JOSE/JWE-Verschlüsselung** für Username/Passwort-Login. Daher wird **Cookie-Import** empfohlen.
+Da der MLP-Login eine clientseitige **JOSE/JWE-Verschlüsselung** erfordert, ist ein direkter Login in Lua nicht möglich. **Cookie-Import wird zwingend empfohlen.**
 
 **⚠️ SSL-Zertifikat bestätigen**
-
-Beim ersten Zugriff fragt MoneyMoney nach dem SSL-Zertifikat für `vue.mlp.de`. Bitte auf **"Immer"** klicken.
+Beim ersten Zugriff muss das SSL-Zertifikat für `vue.mlp.de` in MoneyMoney dauerhaft bestätigt werden.
 
 **Benötigte Cookies (nur für Vue API):**
 
-| Cookie | Domain | Zweck | Gültigkeit |
-|--------|--------|-------|------------|
-| **`VUSESSIONID`** ⚠️ | **`vue.mlp.de`** | **Vue-App-Session (ERFORDERLICH)** | Session |
-| `BIGipServervue.mlp.de` | `vue.mlp.de` | Load-Balancer | Session |
+| Cookie | Domain | Zweck |
+|--------|--------|-------|
+| **`VUSESSIONID`** ⚠️ | **`vue.mlp.de`** | **Session (ERFORDERLICH)** |
+| `BIGipServervue.mlp.de` | `vue.mlp.de` | Load-Balancer |
 
-**Hinweis:** Die `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION` Cookies werden für die **Vue API nicht benötigt** - diese verwendet eine separate `VUSESSIONID`-Session!
-
-**⚠️ Wichtig:** `VUSESSIONID` wird unter der Domain **`vue.mlp.de`** gesetzt (nicht `kundenportal.mlp.de`!). Daher muss im Browser die **Vertragsübersicht** geöffnet werden, damit dieses Cookie verfügbar ist.
+**Wichtig:** `VUSESSIONID` wird nur unter der Domain **`vue.mlp.de`** gesetzt. Öffnen Sie im Browser zwingend die **Vertragsübersicht**, bevor Sie die Cookies exportieren. Falls `VUSESSIONID` mehrfach vorkommt, kopieren Sie alle Werte.
 
 **1. Tampermonkey (empfohlen):**
-
-Tampermonkey installieren, `scripts/moneymoney-cookie-exporter.user.js` hinzufügen. Nach Login auf kundenportal.mlp.de **und Öffnen der Vertragsübersicht** erscheint ein "MM"-Button → "Cookies kopieren".
+`scripts/moneymoney-cookie-exporter.user.js` nutzen. Nach dem Login die Vertragsübersicht öffnen, dann "Cookies kopieren".
 
 **2. HAR-Export:**
-
-```bash
-# 1. Im Browser anmelden: https://kundenportal.mlp.de
-# 2. Vertragsübersicht öffnen (wichtig für VUSESSIONID!)
-# 3. DevTools → Network → Rechtsklick → "Save all as HAR"
-python3 scripts/extract-mlp-cookies.py export.har
-```
+Siehe oben unter "HAR-Export & Python-Skripte".
 
 **3. Manuelles Kopieren:**
-
-1. Im Browser anmelden: `https://kundenportal.mlp.de`
-2. **Vertragsübersicht öffnen** (wichtig für `VUSESSIONID`!)
-3. DevTools → Application → Cookies → `https://vue.mlp.de`:
-   - **`VUSESSIONID`** (⚠️ kann mehrfach vorkommen - beide kopieren!)
-   - `BIGipServervue.mlp.de`
-
-In MoneyMoney als **Passwort** eintragen:
-```
-COOKIE:VUSESSIONID=xxx;BIGipServervue.mlp.de=yyy
-```
+DevTools → Application → Cookies → `https://vue.mlp.de`: Alle `VUSESSIONID` und `BIGipServervue.mlp.de` kopieren.
 
 ## Entwicklung
 
