@@ -16,6 +16,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   secrets:
     name: Secrets scan (gitleaks)
@@ -49,14 +53,12 @@ jobs:
           python-version: "3.11"
 
       - name: Install bandit
-        shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
           python3 -m pip install bandit
 
       - name: Run bandit (tracked Python files)
-        shell: bash
         run: |
           set -euo pipefail
           files="$(git ls-files '*.py' || true)"
