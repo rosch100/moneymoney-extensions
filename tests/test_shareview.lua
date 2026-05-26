@@ -110,36 +110,113 @@ assertNear(amount3, 634.79, "parseCurrencyValue.GBX.value.gbp")
 assertEq(native3, "GBX", "parseCurrencyValue.GBX.value.native")
 
 -- Test: parseHoldings/parseTotalIndicativeValue gegen echtes HAR-HTML
-local f = io.open("/tmp/holdings.html", "rb")
-if not f then
-  print("SKIP  /tmp/holdings.html nicht vorhanden — HTML-Parser-Test übersprungen.")
-  os.exit(0)
+do
+  -- Inline Fixture: bewusst minimal, aber so aufgebaut, dass die Regex/XPath-Matches
+  -- in `parseTotalIndicativeValue` und `parseHoldingRow` exakt greifen.
+  local html = [[
+<div id="TotalIndicativeValue"><span class="currencyChange">GBP|1000.00000000||0|.|,|</span></div>
+<table>
+  <tr class="summaryDataItemRow" id="row1">
+    <td headers="holding"><strong>Example Corp (Aberdeen Share Account)</strong><br/>Shareholder Ref No:1234567890</td>
+    <td headers="quantity"><bdo>257</bdo></td>
+    <td headers="price"><span class="original">GBX|10.0000|99|1|.|,|6</span></td>
+    <td headers="value"><span class="original">GBP|1000.00000000||0|.|,|</span></td>
+    externalid=GB0000000001
+  </tr>
+</table>
+]]
+
+  local total, totalCcy = parseTotalIndicativeValue(html)
+  assertNear(total, 634.79, "parseTotalIndicativeValue.amount")
+  assertEq(totalCcy, "GBP", "parseTotalIndicativeValue.currency")
+
+  local secs = parseHoldings(html)
+  assertEq(#secs, 1, "parseHoldings.count")
+
+  local s = secs[1]
+  print()
+  print("Erste Position:")
+  for k, v in pairs(s) do
+    print(string.format("  %-26s = %s", k, tostring(v)))
+  end
+
+  assertEq(s.name, "Example Corp (Aberdeen Share Account)", "parseHoldings.name")
+  assertEq(s.isin, "GB0000000001", "parseHoldings.isin")
+  assertEq(s.securityNumber, "1234567890", "parseHoldings.securityNumber")
+  assertEq(s.quantity, 257, "parseHoldings.quantity")
+  assertNear(s.price, 2.47, "parseHoldings.price")
+  assertNear(s.amount, 634.79, "parseHoldings.amount")
+  assertEq(s.currencyOfPrice, "GBP", "parseHoldings.currencyOfPrice")
+  assertEq(s.currencyOfOriginalAmount, "GBP", "parseHoldings.currencyOfOriginalAmount")
 end
-local html = f:read("*all")
-f:close()
 
-local total, totalCcy = parseTotalIndicativeValue(html)
-assertNear(total, 634.79, "parseTotalIndicativeValue.amount")
-assertEq(totalCcy, "GBP", "parseTotalIndicativeValue.currency")
+-- Additional edge cases (Coverage)
+do
+  -- parseCurrencyValue: nil / ungültig
+  local a, b, c = parseCurrencyValue(nil)
+  assertEq(a, nil, "parseCurrencyValue.nil.amount")
+  assertEq(b, nil, "parseCurrencyValue.nil.currency")
+  assertEq(c, nil, "parseCurrencyValue.nil.nativeAmount")
 
-local secs = parseHoldings(html)
-assertEq(#secs, 1, "parseHoldings.count")
+  local a2, b2, c2 = parseCurrencyValue("NOTACCUR|abc")
+  assertEq(a2, nil, "parseCurrencyValue.invalid.amount")
+  assertEq(b2, nil, "parseCurrencyValue.invalid.currency")
+  assertEq(c2, nil, "parseCurrencyValue.invalid.nativeAmount")
 
-local s = secs[1]
-print()
-print("Erste Position:")
-for k, v in pairs(s) do
-  print(string.format("  %-26s = %s", k, tostring(v)))
+  -- parseHoldings: nil input -> leere Liste
+  local secs = parseHoldings(nil)
+  assertEq(#secs, 0, "parseHoldings.nil=empty")
+
+  -- parseHoldingRow: invalid ISIN (wrong format) -> empty string
+  local html2 = [[
+<table>
+  <tr class="summaryDataItemRow" id="row2">
+    <td headers="holding"><strong>Name &amp; Co</strong><br/>Shareholder Ref No:ABC-123</td>
+    <td headers="quantity"><bdo>1</bdo></td>
+    <td headers="price"><span class="original">GBX|100.0000|99|1|.|,|6</span></td>
+    <td headers="value"><span class="original">GBP|1.00||0|.|,|</span></td>
+    externalid=GB00BF8Q6K6X
+  </tr>
+</table>
+]]
+  local secs2 = parseHoldings(html2)
+  assertEq(#secs2, 1, "parseHoldings.count.invalid-isin")
+  assertEq(secs2[1].name, "Name & Co", "parseHoldingRow.htmlDecode.name")
+  assertEq(secs2[1].isin, "", "parseHoldingRow.invalid-isin=empty")
 end
 
-assertEq(s.name, "Example Corp (Aberdeen Share Account)", "parseHoldings.name")
-assertEq(s.isin, "GB0000000001", "parseHoldings.isin")
-assertEq(s.securityNumber, "1234567890", "parseHoldings.securityNumber")
-assertEq(s.quantity, 257, "parseHoldings.quantity")
-assertNear(s.price, 2.47, "parseHoldings.price")
-assertNear(s.amount, 634.79, "parseHoldings.amount")
-assertEq(s.currencyOfPrice, "GBP", "parseHoldings.currencyOfPrice")
-assertEq(s.currencyOfOriginalAmount, "GBP", "parseHoldings.currencyOfOriginalAmount")
+-- extractLoginError / isLoggedInPage / isMfaPage
+do
+  local function nodeWithText(text)
+    return { text = function() return text end }
+  end
+
+  local htmlNode = {
+    xpath = function(_, xp)
+      if xp:find("ErrorMessage", 1, true) then
+        return nodeWithText("  Something went wrong  ")
+      end
+      return nil
+    end
+  }
+
+  local err = extractLoginError(htmlNode)
+  assertEq(err, "Something went wrong", "extractLoginError.trim")
+
+  local htmlNode2 = {
+    xpath = function(_, xp)
+      -- return only whitespace -> should be ignored, then return nil
+      return nodeWithText("   ")
+    end
+  }
+  local err2 = extractLoginError(htmlNode2)
+  assertEq(err2, nil, "extractLoginError.whitespace=nil")
+
+  assertEq(isLoggedInPage('noTotal but id="TotalIndicativeValue"'), true, "isLoggedInPage.TotalIndicativeValue")
+  assertEq(isLoggedInPage("My Holdings Summary"), true, "isLoggedInPage.MyHoldingsSummary")
+  assertEq(isMfaPage("Bitte authentication code eingeben"), true, "isMfaPage.authentication-code")
+  assertEq(isMfaPage(nil), false, "isMfaPage.nil=false")
+end
 
 print()
 print("ALL TESTS PASSED")

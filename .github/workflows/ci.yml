@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-validate:
+    name: Test & syntax checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Lua 5.4 liegt in der im rockspec geforderten Spanne (>=5.1, <5.5)
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+
+      - name: Lua unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git ls-files 'tests/*.lua' || true)"
+          if [ -z "${files}" ]; then
+            echo "No Lua tests tracked."
+            exit 0
+          fi
+          for f in ${files}; do
+            lua "$f"
+          done
+
+      - name: Lua syntax check (all tracked .lua)
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do
+            lua -e "assert(loadfile('$file'))"
+          done < <(git ls-files '*.lua')
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Python syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git ls-files '*.py' || true)"
+          if [ -z "${files}" ]; then
+            echo "No Python files tracked."
+            exit 0
+          fi
+          while IFS= read -r file; do
+            python3 -m py_compile "$file"
+          done < <(git ls-files '*.py')
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: JavaScript parse check (tracked .js)
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git ls-files '*.js' || true)"
+          if [ -z "${files}" ]; then
+            echo "No JavaScript files tracked."
+            exit 0
+          fi
+          while IFS= read -r file; do
+            node --check "$file"
+          done < <(git ls-files '*.js')
+
