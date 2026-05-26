@@ -10,10 +10,9 @@ Inoffizielle Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 | `extensions/Fidelity.lua` | Fidelity Investments | Cookie-Import |
 | `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
 | `extensions/Shareview.lua` | Equiniti Shareview Portfolio (UK) | Direct-Login (Username + Passwort + Geburtsdatum + MFA) |
+| `extensions/MLP Versicherungen.lua` | MLP Versicherungen | Cookie-Import (Login-API erfordert JOSE/JWE-Verschlüsselung) |
 
-Cookie-Import ist bei den US-Banken nötig, weil ihr Web-Login auf clientseitige RSA-Verschlüsselung (BoA), Akamai-Bot-Schutz (Fidelity) oder HttpOnly-Cookies nach MFA (Presidential) angewiesen ist — Mechanismen, die ohne Browser-Runtime in der Lua-Engine nicht nachbildbar sind. Shareview funktioniert direkt aus MoneyMoney heraus.
-
-Für Presidential ist der MFA-Code-Flow vollständig implementiert (inkl. Retry bei falscher Eingabe). Der Login schließt aktuell mit dem Hinweis auf Cookie-Import ab, weil MoneyMoney das nach MFA gesetzte HttpOnly-Cookie `rftoken` nicht an die Extension durchreicht; sobald sich das ändert, funktioniert MFA ohne weitere Code-Änderung.
+Cookie-Import ist bei den US-Banken und MLP nötig, weil ihr Web-Login auf clientseitige RSA-Verschlüsselung (BoA), Akamai-Bot-Schutz (Fidelity), HttpOnly-Cookies nach MFA (Presidential) oder JOSE/JWE-Verschlüsselung (MLP) angewiesen ist — Mechanismen, die ohne Browser-Runtime in der Lua-Engine nicht nachbildbar sind. Shareview funktioniert direkt aus MoneyMoney heraus mit MFA.
 
 ## Installation
 
@@ -34,7 +33,20 @@ Mit Pipe-Suffix (`name|01.01.1970`) speichert MoneyMoney das Geburtsdatum im Key
 
 Bei falsch eingegebenem MFA-Code fragt MoneyMoney nur den Code erneut ab — Benutzername, Passwort und Geburtsdatum bleiben erhalten. Drei aufeinanderfolgende Fehleingaben sperren das Konto bei Shareview temporär.
 
-## Cookie-Import (BoA, Fidelity, Presidential)
+## MLP Versicherungen-Login
+
+| Feld | Eingabe | Hinweis |
+|------|---------|---------|
+| Benutzername | (leer lassen) | Bei Cookie-Import |
+| Passwort | `COOKIE:name=value;...` | Siehe Cookie-Import unten |
+| ODER Benutzername | MLP Benutzerkennung | Falls Username/Passwort versucht werden soll |
+| ODER Passwort | MLP Passwort | Extension versucht automatisch Cookie-Fallback bei JOSE-Fehler |
+
+**Hinweis:** Die MLP-Login-API erwartet Credentials im **JOSE/JWE-Format** (RSA-OAEP-512 mit A256GCM). Diese clientseitige Verschlüsselung ist in Lua nicht nachbildbar. Daher wird **Cookie-Import empfohlen**.
+
+**Benötigte Cookies:** `VUSESSIONID` (von `vue.mlp.de`), `BIGipServervue.mlp.de`, optional `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION` (für Consent)
+
+## Cookie-Import (BoA, Fidelity, Presidential, MLP)
 
 Cookies aus eingeloggtem Browser exportieren und im MoneyMoney-Passwortfeld als Wert mit `COOKIE:`-Präfix eintragen:
 
@@ -79,9 +91,77 @@ HAR-Variante:
 python3 scripts/extract-boa-cookies.py export.har
 python3 scripts/extract-fidelity-cookies.py export.har
 python3 scripts/extract-presidential-cookies.py export.har
+python3 scripts/extract-mlp-cookies.py export.har
 ```
 
 Cookies nach dem Login zeitnah exportieren — die Session läuft sonst ab.
+
+### MLP Versicherungen
+
+**Hinweis:** Diese Extension unterstützt nur **Versicherungsverträge** (Lebensversicherung, BU, etc.) aus dem MLP Kundenportal. Bank-Produkte (Konten, Depots) werden über separate Schnittstellen abgedeckt.
+
+Die MLP-API erfordert **JOSE/JWE-Verschlüsselung** für Username/Passwort-Login. Daher wird **Cookie-Import** empfohlen.
+
+**⚠️ SSL-Zertifikat bestätigen**
+
+Beim ersten Zugriff fragt MoneyMoney nach dem SSL-Zertifikat für `vue.mlp.de`. Bitte auf **"Immer"** klicken.
+
+**Benötigte Cookies (nur für Vue API):**
+
+| Cookie | Domain | Zweck | Gültigkeit |
+|--------|--------|-------|------------|
+| **`VUSESSIONID`** ⚠️ | **`vue.mlp.de`** | **Vue-App-Session (ERFORDERLICH)** | Session |
+| `BIGipServervue.mlp.de` | `vue.mlp.de` | Load-Balancer | Session |
+
+**Hinweis:** Die `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION` Cookies werden für die **Vue API nicht benötigt** - diese verwendet eine separate `VUSESSIONID`-Session!
+
+**⚠️ Wichtig:** `VUSESSIONID` wird unter der Domain **`vue.mlp.de`** gesetzt (nicht `kundenportal.mlp.de`!). Daher muss im Browser die **Vertragsübersicht** geöffnet werden, damit dieses Cookie verfügbar ist.
+
+**1. Tampermonkey (empfohlen):**
+
+Tampermonkey installieren, `scripts/moneymoney-cookie-exporter.user.js` hinzufügen. Nach Login auf kundenportal.mlp.de **und Öffnen der Vertragsübersicht** erscheint ein "MM"-Button → "Cookies kopieren".
+
+**2. HAR-Export:**
+
+```bash
+# 1. Im Browser anmelden: https://kundenportal.mlp.de
+# 2. Vertragsübersicht öffnen (wichtig für VUSESSIONID!)
+# 3. DevTools → Network → Rechtsklick → "Save all as HAR"
+python3 scripts/extract-mlp-cookies.py export.har
+```
+
+**3. Manuelles Kopieren:**
+
+1. Im Browser anmelden: `https://kundenportal.mlp.de`
+2. **Vertragsübersicht öffnen** (wichtig für `VUSESSIONID`!)
+3. DevTools → Application → Cookies → `https://vue.mlp.de`:
+   - **`VUSESSIONID`** (⚠️ kann mehrfach vorkommen - beide kopieren!)
+   - `BIGipServervue.mlp.de`
+
+In MoneyMoney als **Passwort** eintragen:
+```
+COOKIE:VUSESSIONID=xxx;BIGipServervue.mlp.de=yyy
+```
+
+## Entwicklung
+
+### Lokale Tests
+
+```bash
+lua tests/test_shareview.lua
+lua tests/test_mlp_kundenportal.lua
+```
+
+### CI
+
+GitHub Actions führt bei jedem Push/Pull Request automatisch aus:
+
+- Lua-Unit-Tests (alle `tests/*.lua`)
+- Lua-Syntax-Check (alle `*.lua`)
+- Python-Syntax-Check (alle `*.py`)
+- JavaScript-Syntax-Check (alle `*.js`)
+
+Siehe [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## API-Referenz
 
