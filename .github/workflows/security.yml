@@ -1,0 +1,56 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secrets scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: "--redact --verbose"
+
+  python-sast:
+    name: Python SAST (bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install bandit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install bandit
+
+      - name: Run bandit (tracked Python files)
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(git ls-files '*.py' || true)"
+          if [ -z "${files}" ]; then
+            echo "No Python files tracked."
+            exit 0
+          fi
+          bandit -q -r scripts tests
+
