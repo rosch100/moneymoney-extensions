@@ -12,6 +12,8 @@
 // @match        https://presidentialpcbanking.com/*
 // @match        https://portfolio.shareview.co.uk/*
 // @match        https://*.shareview.co.uk/*
+// @match        https://kundenportal.mlp.de/*
+// @match        https://*.mlp.de/*
 // @grant        GM.cookie
 // @grant        GM_cookie
 // @grant        GM_setClipboard
@@ -87,6 +89,26 @@
         'FedAuth', 'ASP.NET_SessionId', 'SPStsAuthContext_7PortfolioDefault',
         'WSS_FullScreenMode', 'locatecc_DefaultPortfolio',
         'IsPrivacyOn', 'ILiveInUKStatement', 'IsHtmlElementContentReplacerActive',
+      ],
+    },
+    mlp: {
+      label: 'MLP Versicherungen',
+      match: /mlp\.de$/i,
+      cookieDomain: '.mlp.de',
+      sessionHost: 'kundenportal.mlp.de',
+      sessionPath: '/',
+      origins: [
+        'https://kundenportal.mlp.de',
+        'https://financepilot-pe.mlp.de',
+        'https://vue.mlp.de',
+      ],
+      // WICHTIG: Für Vue API nur VUSESSIONID + BIGipServer nötig!
+      // CAS_SESSION etc. werden für vue.mlp.de API NICHT verwendet
+      critical: ['VUSESSIONID'],
+      priority: [
+        'VUSESSIONID',  // ERFORDERLICH (kann 2x vorkommen!)
+        'BIGipServervue.mlp.de',
+        // 'CAS_SESSION', 'CAS_S_SESSION', 'CAS_DEVICE_SESSION', // Nur für Auth-Server
       ],
     },
   };
