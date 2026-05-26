@@ -71,7 +71,7 @@ jobs:
             python3 -m py_compile "$file"
           done < <(git ls-files '*.py')
 
-      - name: External scripts conformance
+      - name: MoneyMoney Script conformance
         shell: bash
         run: |
           set -euo pipefail
