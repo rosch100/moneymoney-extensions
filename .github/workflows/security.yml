@@ -23,8 +23,9 @@ jobs:
 
       - name: Run gitleaks
         uses: gitleaks/gitleaks-action@v2
-        with:
-          args: "--redact --verbose"
+        # gitleaks-action v2 konfiguriert über Env-Variablen; kein `with: args` nutzen.
+        # Standardverhalten ist bereits „redact“-freundlich; bei Bedarf kann man über
+        # GITLEAKS_CONFIG / GITLEAKS_VERSION weiter feinjustieren.
 
   python-sast:
     name: Python SAST (bandit)
