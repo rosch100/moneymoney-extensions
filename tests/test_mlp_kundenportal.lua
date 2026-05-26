@@ -101,23 +101,23 @@ dofile("extensions/MLP Versicherungen.lua")
 print()
 print("=== Test: Grundlegende Funktionen ===")
 
-local d1, m1, y1 = parseIsoDate("2026-01-01T22:00:00.000+00:00")
-assertEq(d1, 29, "parseIsoDate.day")
-assertEq(m1, 4, "parseIsoDate.month")
+local d1, m1, y1 = parseIsoDate("2026-01-01T00:00:00.000+00:00")
+assertEq(d1, 1, "parseIsoDate.day")
+assertEq(m1, 1, "parseIsoDate.month")
 assertEq(y1, 2026, "parseIsoDate.year")
 assertEq(parseIsoDate(nil), nil, "parseIsoDate.nil")
 
-local display1 = formatDateDisplay("2040-01-01T22:00:00.000+00:00")
-assert(display1 == "01.01.2040" or display1 == "01.01.2040", "formatDateDisplay")
-print("OK    formatDateDisplay.heidelberger = " .. display1 .. " (TZ-abhängig)")
+local display1 = formatDateDisplay("2040-01-01T00:00:00.000+00:00")
+assert(display1 == "01.01.2040", "formatDateDisplay")
+print("OK    formatDateDisplay = " .. display1)
 
 assertEq(formatDateDisplay(nil), "", "formatDateDisplay.nil")
 assertEq(SupportsBank("WebBanking", "MLP Versicherungen"), true, "SupportsBank.mlp")
 assertEq(SupportsBank("FinTS", "MLP Versicherungen"), false, "SupportsBank.fints")
 assertEq(SupportsBank("WebBanking", "Andere Bank"), false, "SupportsBank.wrong-service")
 
-assertEq(formatCurrency(50000.00), "108.150,30 €", "formatCurrency.gross")
-assertEq(formatCurrency(100.00), "643,14 €", "formatCurrency.klein")
+assertEq(formatCurrency(50000.00), "50.000,00 €", "formatCurrency.gross")
+assertEq(formatCurrency(50.00), "50,00 €", "formatCurrency.klein")
 assertEq(formatCurrency(0), "0,00 €", "formatCurrency.null")
 
 -- ============================================================
@@ -128,17 +128,17 @@ local testContracts = {
   {
     id = "00000000000000000000000000000001",
     number = "123456789",
-    company = { shortName = "Lebensversicherung AG", longName = "Lebensversicherung AG" },
+    company = { shortName = "Versicherung AG", longName = "Versicherung AG" },
     contribution = 100.00, paymentMethod = "MONAT",
-    validFrom = "2000-01-01T22:00:00.000+00:00", validUntil = "2043-08-31T22:00:00.000+00:00",
-    state = "aktiv", category = "Vorsorge", tariff = "FLVG3",
+    validFrom = "2000-01-01T00:00:00.000+00:00", validUntil = "2050-01-01T00:00:00.000+00:00",
+    state = "aktiv", category = "Vorsorge", tariff = "TARIF-A",
     contractType = "FLV", posType = "FLV",
-    shareValue = 50000.00, dateOfShareValue = "2026-01-01T22:00:00.000+00:00",
+    shareValue = 50000.00, dateOfShareValue = "2026-01-01T00:00:00.000+00:00",
     currency = "EUR",
     specificAttributes = {
-      deathInsuredSum = { value = 100000.00, displayValue = "72.710,76 €" },
-      endOfPayment = { value = "2040-01-01T22:00:00.000+00:00", displayValue = "01.01.2040" },
-      netContribution = { value = 90.00, displayValue = "570,05 €" }
+      deathInsuredSum = { value = 100000.00, displayValue = "100.000,00 €" },
+      endOfPayment = { value = "2040-01-01T00:00:00.000+00:00", displayValue = "01.01.2040" },
+      netContribution = { value = 90.00, displayValue = "90,00 €" }
     }
   },
   {
@@ -146,16 +146,16 @@ local testContracts = {
     number = "987654321",
     company = { shortName = "Versicherung GmbH", longName = "Versicherung GmbH" },
     contribution = 50.00, paymentMethod = "MONAT",
-    validFrom = "2000-01-01T22:00:00.000+00:00", validUntil = "2050-01-01T22:00:00.000+00:00",
-    state = "aktiv", category = "Vorsorge", tariff = "AIRBAG I",
+    validFrom = "2010-01-01T00:00:00.000+00:00", validUntil = "2060-01-01T00:00:00.000+00:00",
+    state = "aktiv", category = "Vorsorge", tariff = "TARIF-B",
     contractType = "KLV", posType = "KLV",
-    shareValue = 22636.27, dateOfShareValue = "2026-01-01T22:00:00.000+00:00",
+    shareValue = 10000.00, dateOfShareValue = "2026-01-01T00:00:00.000+00:00",
     currency = "EUR",
     specificAttributes = {
-      deathInsuredSum = { value = 20000.00, displayValue = "46.556,00 €" },
-      lifeInsuredSum = { value = 15000.00, displayValue = "43.460,83 €" },
-      endOfPayment = { value = "2050-01-01T22:00:00.000+00:00", displayValue = "01.01.2050" },
-      netContribution = { value = 50.00, displayValue = "153,41 €" }
+      deathInsuredSum = { value = 20000.00, displayValue = "20.000,00 €" },
+      lifeInsuredSum = { value = 15000.00, displayValue = "15.000,00 €" },
+      endOfPayment = { value = "2050-01-01T00:00:00.000+00:00", displayValue = "01.01.2050" },
+      netContribution = { value = 50.00, displayValue = "50,00 €" }
     }
   }
 }
