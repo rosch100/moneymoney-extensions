@@ -360,12 +360,68 @@ lua tests/test_mlp_kundenportal.lua
 ---
 
 ## Entwicklung
+### Konventionen
 
-Lokale Tests für Extensions:
+1. **Lua Extensions-API**
+   Eine Extension muss die von MoneyMoney erwarteten Einstiegspunkte implementieren und über `WebBanking{ ... }` registrieren.
 
+   Typische Funktionen:
+   - `SupportsBank(protocol, bankCode)`
+   - `InitializeSession` bzw. `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
+   - `ListAccounts(knownAccounts)`
+   - `RefreshAccount(account, since)`
+   - optional: Kontoauszüge (`GetAvailableStatements`, `GetStatement`, `FetchStatements`, `DownloadStatement`)
+   - `EndSession()`
+
+2. **Extension Version**
+   In allen Extensions in diesem Repo ist `version = 1.00` gesetzt. Behalte diesen Wert bei, wenn du nur Felder/Logik korrigierst, aber das Datenformat / die Engine-Erwartungen nicht änderst.
+
+3. **Beispiele ohne persönliche Daten**
+   Beispielwerte (z.B. Namen, Geburtstage, Vertrags-/Kontonummern) müssen anonymisiert sein. Username darf in Beispielen stehen, persönliche Daten ansonsten nicht.
+
+4. **Extensions sind unsigniert**
+   Alle Extensions hier sind unsigniert. In MoneyMoney die Signaturprüfung für Extensions deaktivieren.
+
+---
+### Lokale Tests
+
+#### Lua-Unit-Tests
 ```bash
 lua tests/test_shareview.lua
 lua tests/test_mlp_kundenportal.lua
+lua tests/test_presidential_bank.lua
+lua tests/test_fidelity_cookie_import.lua
 ```
 
-Alle Extensions hier sind unsigniert. In MoneyMoney die Signaturprüfung für Extensions deaktivieren.
+#### Externe Cookie-Exporter (Konformität)
+```bash
+python3 tests/test_external_scripts_conformance.py
+```
+
+Die Konformität prüft u.a.:
+- keine UTF-8 BOM in Python/JS-Dateien
+- Python-Shebang in `scripts/extract-*.py`
+- Docstring-Struktur (muss „MoneyMoney“ enthalten und eine Usage für `datei.har`)
+- `__version__` im Format `X.Y.Z`
+- `format_cookies` Output-Form (falls vorhanden) muss mit `COOKIE:` starten und `key=value` Paare per `;` enthalten (keine Kommas)
+- das Tampermonkey `.user.js` muss einen gültigen UserScript Header haben und Semikolon-Join für Cookie-Paare nutzen
+
+---
+### Neue Extension hinzufügen
+
+1. **Datei anlegen**
+   - Lege eine neue Datei unter `extensions/` an (z.B. `extensions/XYZ Bank.lua`).
+2. **Registrierung**
+   - Setze `WebBanking{ version = 1.00, url = ..., services = {...}, description = ... }`.
+3. **WebBanking Entry-Points**
+   - Implementiere `SupportsBank` und den passenden Session-Handler.
+   - Implementiere `ListAccounts` und `RefreshAccount`.
+   - Implementiere `EndSession`, falls die Engine Logout-Logik erwartet.
+4. **Doku ergänzen**
+   - Ergänze im gleichen Stil wie die anderen Abschnitte in `docs/LUA-EXTENSIONS.md`:
+     Registrierung, Funktionen/Parameter, bekannte Einschränkungen, Tests.
+5. **Tests ergänzen**
+   - Füge mindestens eine Lua Testdatei unter `tests/` hinzu, wenn Parser-/Mapping-Logik geändert wurde.
+6. **CI Abdeckung**
+   - Lokale CI-Syntax-Checks kommen über die vorhandenen Workflows automatisch.
+
