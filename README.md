@@ -130,23 +130,36 @@ DevTools → Application → Cookies → `https://vue.mlp.de`: Alle `VUSESSIONID
 
 ## Entwicklung
 
+Extensions sind unsigniert — in MoneyMoney die Signaturprüfung deaktivieren. Alle Extensions in `extensions/` verwenden `version = 1.00`.
+
+Lokal wie in CI: **Lua 5.4**, **Python 3.11**, **Node 24**.
+
 ### Lokale Tests
 
 ```bash
-lua tests/test_shareview.lua
-lua tests/test_mlp_kundenportal.lua
+# Alle Lua-Unit-Tests
+for f in tests/*.lua; do lua "$f"; done
+
+# Cookie-Exporter (scripts/extract-*.py, Tampermonkey .user.js)
+python3 tests/test_external_scripts_conformance.py
 ```
+
+Getrackte Lua-Tests: `test_shareview.lua`, `test_mlp_kundenportal.lua`, `test_presidential_bank.lua`, `test_fidelity_cookie_import.lua`.
 
 ### CI
 
-GitHub Actions führt bei jedem Push/Pull Request automatisch aus:
+Bei Push und Pull Request laufen vier GitHub-Actions-Workflows:
 
-- Lua-Unit-Tests (alle `tests/*.lua`)
-- Lua-Syntax-Check (alle `*.lua`)
-- Python-Syntax-Check (alle `*.py`)
-- JavaScript-Syntax-Check (alle `*.js`)
+| Workflow | Datei | Prüfungen |
+|----------|-------|-----------|
+| Extension tests | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lua-Unit-Tests (`tests/*.lua`), Lua-Syntax (`*.lua`), Python-Syntax (`*.py`), JavaScript-Parse-Check (`*.js`) |
+| MoneyMoney Script Conformance | [`.github/workflows/moneymoney-script-conformance.yml`](.github/workflows/moneymoney-script-conformance.yml) | `tests/test_external_scripts_conformance.py` |
+| Lua rockspec build | [`.github/workflows/lua-rockspec.yml`](.github/workflows/lua-rockspec.yml) | `luarocks make moneymoney-dev-1.rockspec` |
+| Security | [`.github/workflows/security.yml`](.github/workflows/security.yml) | gitleaks (Secrets), bandit (Python SAST in `scripts/`, `tests/`) |
 
-Siehe [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+Der Security-Workflow läuft zusätzlich wöchentlich per Cron.
+
+Details pro Extension: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
 
 ## API-Referenz
 
