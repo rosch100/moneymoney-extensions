@@ -56,7 +56,7 @@ COOKIE:name=value;name2=value2
 
 Benutzername bleibt unverändert.
 
-### Tampermonkey (Chrome / Edge / Firefox)
+### Cookie-Export via Tampermonkey (Chrome / Edge / Firefox)
 
 Nur Tampermonkey kann HttpOnly-Cookies lesen (`GM.cookie`).
 
@@ -76,7 +76,7 @@ In Tampermonkey: **Erweitert → Sicherheit → Cookie-Zugriff: Alle**.
    - Presidential: `www.presidentialpcbanking.com`
 3. **Alt+C** → Cookies kopieren → in MoneyMoney als Passwort einfügen.
 
-### HAR-Export & Python-Skripte (alle Browser)
+### Cookie-Export via HAR-Datei (alle Browser)
 
 Falls Tampermonkey nicht verfügbar ist (z. B. in Safari) oder nicht alle Cookies erfasst, können die Cookies aus einer HAR-Datei (HTTP Archive) extrahiert werden.
 
@@ -121,7 +121,7 @@ Beim ersten Zugriff muss das SSL-Zertifikat für `vue.mlp.de` in MoneyMoney daue
 `scripts/moneymoney-cookie-exporter.user.js` nutzen. Nach dem Login die Vertragsübersicht öffnen, dann "Cookies kopieren".
 
 **2. HAR-Export:**
-Siehe oben unter "HAR-Export & Python-Skripte".
+Siehe oben unter "Cookie-Export via HAR-Datei".
 
 **3. Manuelles Kopieren:**
 DevTools → Application → Cookies → `https://vue.mlp.de`: Alle `VUSESSIONID` und `BIGipServervue.mlp.de` kopieren.
