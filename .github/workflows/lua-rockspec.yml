@@ -36,7 +36,7 @@ jobs:
           buildCache: "false"
 
       - name: Setup LuaRocks
-        uses: leafo/gh-actions-luarocks@v4
+        uses: leafo/gh-actions-luarocks@v6
 
       - name: Build rockspec
         run: |
