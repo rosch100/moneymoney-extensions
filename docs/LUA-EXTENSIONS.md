@@ -137,7 +137,7 @@ WebBanking{
 | Feld | Wert |
 |------|------|
 | Service | Presidential Bank |
-| `bankCode` | 255073345 (ABA) |
+| `bankCode` | 255073345 (ABA Routing Number) |
 | Währung | USD |
 
 ### `InitializeSession2(protocol, bankCode, step, credentials, interactive)`
@@ -209,8 +209,8 @@ Zwei-Faktor-Flow mit zusätzlichem Geburtsdatum-Step, falls dieses nicht im Benu
 
 | Variante | Wert | Verhalten |
 |----------|------|-----------|
-| Komfort | `max.mustermann|01.01.1970` | Geburtsdatum aus Pipe-Suffix, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
-| Multi-Step | `max.mustermann` | MoneyMoney fragt das Geburtsdatum interaktiv nach. Funktioniert **nicht** für nicht-interaktive Background-Syncs. |
+| Komfort | `max.mustermannmann|01.01.1970` | Geburtsdatum aus Pipe-Suffix, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
+| Multi-Step | `username` | MoneyMoney fragt das Geburtsdatum interaktiv nach. Funktioniert **nicht** für nicht-interaktive Background-Syncs. |
 
 ### `ListAccounts(knownAccounts)`
 
