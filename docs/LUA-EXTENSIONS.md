@@ -13,16 +13,6 @@ API-Referenz pro Extension. Engine-Spezifikation: [MoneyMoney Web Banking API](h
 
 Fehler erscheinen im Protokollfenster (**Fenster → Protokollfenster**).
 
-## Cookie-Import (BoA, Fidelity, Presidential)
-
-Passwortfeld in MoneyMoney:
-
-```
-COOKIE:name=value;name2=value2
-```
-
-Export-Wege: siehe [README](../README.md#cookie-import-boa-fidelity-presidential).
-
 ---
 
 ## Bank of America
@@ -52,8 +42,8 @@ Passwort mit `COOKIE:`-Präfix → Session-Cookies setzen, Zugang zu `secure.ban
 
 ### `ListAccounts(knownAccounts)`
 
-HTML von `account-details.go`. Konten aus `TL_NPI_AcctName` / „Ending in".
-Felder: `name`, `accountNumber` (letzte 4 Ziffern), `bankCode`, `currency`, `type`, `attributes = {"statements"}`.
+HTML von `account-details.go`. Konten aus `TL_NPI_AcctName` / „Ending in".  
+Felder: `name`, `accountNumber` (letzte 4 Ziffern), `bankCode`, `currency`, `type`, `attributes = {"statements"}`.  
 Typen: `AccountTypeCreditCard` oder `AccountTypeGiro`.
 
 ### `RefreshAccount(account, since)`
@@ -63,7 +53,7 @@ Typen: `AccountTypeCreditCard` oder `AccountTypeGiro`.
 | `balance` | Kontostand (Kreditkarte: Statement Balance negativ) |
 | `transactions` | Umsätze ab `since`, neueste zuerst |
 
-Umsatzfelder: `bookingDate`, `valutaDate`, `amount`, `purpose`, `name`, `bookingText`, `endToEndReference` (Detail-POST).
+Umsatzfelder: `bookingDate`, `valutaDate`, `amount`, `purpose`, `name`, `bookingText`, `endToEndReference` (Detail-POST).  
 Datenquelle: HTML Activity-Seiten (`stmtFromDateList`).
 
 ### Kontoauszüge
@@ -111,7 +101,7 @@ WebBanking{
 
 ### `ListAccounts(knownAccounts)`
 
-GraphQL `GetContext` → `person.assets`.
+GraphQL `GetContext` → `person.assets`.  
 Felder: `name`, `accountNumber`, `portfolio`, `currency`, `type`, `bankCode`.
 
 ### `RefreshAccount(account, since)`
@@ -165,7 +155,7 @@ Der MFA-Submit selbst funktioniert. Das anschließende `finalizeLogin` blockiert
 
 ### `ListAccounts(knownAccounts)`
 
-REST `accts-olb/live/v1/history`.
+REST `accts-olb/live/v1/history`.  
 Felder: `name`, `accountNumber` (interne ID), `bankCode`, `currency`, `type`.
 
 ### `RefreshAccount(account, since)`
@@ -212,19 +202,19 @@ Zwei-Faktor-Flow mit zusätzlichem Geburtsdatum-Step, falls dieses nicht im Benu
 | Schritt | Inhalt | Bedingung |
 |---------|--------|-----------|
 | 1  | Username + Passwort | immer |
-| 1a | Geburtsdatum (`TT.MM.JJJJ`) | nur wenn der Username keinen `\|TT.MM.JJJJ`-Suffix enthält |
+| 1a | Geburtsdatum (`TT.MM.JJJJ`) | nur wenn der Username keinen `|TT.MM.JJJJ`-Suffix enthält |
 | 2  | 6-stelliger MFA-Code | immer; bei Reject wird die MFA-Seite mit frischem ASP.NET-`VIEWSTATE` als Basis für den nächsten Versuch behalten und nur der Code neu abgefragt |
 
 #### Username-Eingabe
 
 | Variante | Wert | Verhalten |
 |----------|------|-----------|
-| Komfort | `max.mustermann\|01.01.1970` | Geburtsdatum aus Pipe-Suffix, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
+| Komfort | `max.mustermann|01.01.1970` | Geburtsdatum aus Pipe-Suffix, im macOS-Keychain verschlüsselt abgelegt. Funktioniert für Background-Syncs. |
 | Multi-Step | `max.mustermann` | MoneyMoney fragt das Geburtsdatum interaktiv nach. Funktioniert **nicht** für nicht-interaktive Background-Syncs. |
 
 ### `ListAccounts(knownAccounts)`
 
-Eine konsolidierte Position „Shareview Portfolio" mit allen Holdings als Wertpapiere.
+Eine konsolidierte Position „Shareview Portfolio" mit allen Holdings als Wertpapiere.  
 Felder: `name`, `accountNumber = "shareview-portfolio"`, `portfolio = true`, `currency = "GBP"`, `type = AccountTypePortfolio`, `bankCode = "Shareview"`.
 
 ### `RefreshAccount(account, since)`
@@ -246,7 +236,6 @@ Pro Wertpapier:
 | `quantity` | Spalte „Quantity" |
 | `price` | Spalte „Price" (GBX → GBP, geteilt durch 100) |
 | `amount` | Spalte „Value" (GBX → GBP) |
-| `currencyOfPrice` / `currencyOfOriginalAmount` | Native Währung, GBX wird zu GBP normalisiert |
 
 Datenquelle: HTML der `holdingssummary.aspx`-Seite (ASP.NET WebForms / SharePoint), kein JSON-API.
 
@@ -260,14 +249,128 @@ Optionaler GET auf `Logoff.aspx`; lokale Session-Cookies werden zurückgesetzt.
 - Drei aufeinanderfolgende falsche MFA-Codes sperren das Konto bei Shareview temporär.
 - Nur GBP-Anzeige live verifiziert.
 
+### Tests
+
+```bash
+lua tests/test_shareview.lua
+```
+
+---
+
+## MLP Versicherungen
+
+**Datei:** `extensions/MLP Versicherungen.lua`
+
+### Registrierung
+
+```lua
+WebBanking{
+  version     = 1.00,
+  url         = "https://kundenportal.mlp.de",
+  services    = {"MLP Versicherungen"},
+  description = "MLP Versicherungen - Cookie-Import (VUSESSIONID von vue.mlp.de)"
+}
+```
+
+| Feld | Wert |
+|------|------|
+| Service | MLP Versicherungen |
+| Kontotyp | Wertpapierdepot (`AccountTypePortfolio`) |
+| Login | Cookie-Import (JOSE/JWE-Verschlüsselung nicht in Lua umsetzbar) |
+
+### Unterstützte Vertragstypen
+
+| Typ | Name | Beschreibung |
+|-----|------|--------------|
+| `FLV` | Fondsgebundene Lebensversicherung | Aktienbasierte Lebensversicherung |
+| `KLV` | Kapitallebensversicherung | Klassische Kapital-Lebensversicherung |
+| `LV` | Lebensversicherung | Allgemeine Lebensversicherung |
+| `REN` | Rentenversicherung | Rente im Alter |
+| `BU` | Berufsunfähigkeitsversicherung | Absicherung bei BU |
+| `BUZ` | Berufsunfähigkeits-Zusatz | Zusatzdeckung BU |
+| `BAV` | Betriebliche Altersvorsorge | Arbeitgeberfinanziert |
+| `RIESTER` | Riester-Rente | Geförderte Altersvorsorge |
+| `RUERUP` | Rürup-Rente | Basisrente |
+| *weitere* | Vorsorgevertrag | Alle weiteren Verträge |
+
+### Login-API Limitation
+
+Die MLP-Authentifizierungs-API (`/services_auth/auth-backend/api/authentication/login`) erfordert **JOSE/JWE-verschlüsselte Credentials**:
+
+- **Content-Type:** `application/jose`
+- **Algorithmus:** RSA-OAEP-512 (Key Encipherment)
+- **Encryption:** A256GCM (Content Encryption)
+- **Key ID:** `cas-pin-encryption-prod-v2`
+
+Die Lua-Engine von MoneyMoney bietet keine native Unterstützung für JWE-Verschlüsselung. Ein direkter Login aus MoneyMoney heraus ist daher **technisch nicht möglich**.
+
+**Workaround:** Cookie-Import aus einem authentifizierten Browser-Session.
+
+### `InitializeSession(protocol, bankCode, username, username2, password, username3)`
+
+`password` mit `COOKIE:`-Präfix → Session-Cookies übernehmen, API-Zugang prüfen.
+
+Erforderliche Cookies für die Vertrags-API (`vue.mlp.de`):
+- `VUSESSIONID` – Session-Token (⚠️ kann mehrfach vorkommen)
+- `BIGipServervue.mlp.de` – Load-Balancer
+
+Optional (für Consent-Calls):
+- `CAS_SESSION` – Auth-Session-Token
+- `CAS_DEVICE_SESSION` – Geräte-Token
+
+Beispiel:
+```
+COOKIE:VUSESSIONID=abc123;VUSESSIONID=def456;BIGipServervue.mlp.de=xyz789
+```
+
+### `ListAccounts(knownAccounts)`
+
+Pro Versicherung ein Depot-Konto.  
+Felder: `name`, `accountNumber`, `portfolio = true`, `currency`, `type = AccountTypePortfolio`, `bankCode`.
+
+Der Kontoname enthält: `Unternehmen Vertragsnummer (Tarif) | Beitrag bis DD.MM.YYYY`.
+
+### `RefreshAccount(account, since)`
+
+`since` wird ignoriert (Wertpapierdepot ohne Transaktionsliste).
+
+| Feld | Inhalt |
+|------|--------|
+| `balance` | Aktueller Rückkaufswert |
+| `securities` | Eine Position pro Versicherung |
+
+Pro Wertpapier:
+
+| Feld | Wert |
+|------|------|
+| `name` | Versicherungstyp + Tarif + Todesfallsumme + Erlebensfallsumme + Beitrag |
+| `isin` | "" (Lebensversicherungen haben keine ISIN) |
+| `securityNumber` | Vertragsnummer |
+| `quantity` | 1 (ein "Stück" Versicherung) |
+| `price` | Aktueller Rückkaufswert |
+| `amount` | Wert der Depotposition |
+| `purchasePrice` | Geschätzte Summe aller bisherigen Beiträge |
+
+### Bekannte Einschränkungen
+
+- **Login nur via Cookie-Import möglich** — Direkter Username/Passwort-Login scheitert an JOSE/JWE-Verschlüsselung (API erwartet `application/jose`, nicht nachbildbar in Lua).
+- Keine Beitragszahlungen als Transaktionen sichtbar (nur aktueller Wert).
+
+### Tests
+
+```bash
+lua tests/test_mlp_kundenportal.lua
+```
+
 ---
 
 ## Entwicklung
 
-Lokale Helper-Tests (Shareview):
+Lokale Tests für Extensions:
 
 ```bash
 lua tests/test_shareview.lua
+lua tests/test_mlp_kundenportal.lua
 ```
 
 Alle Extensions hier sind unsigniert. In MoneyMoney die Signaturprüfung für Extensions deaktivieren.
