@@ -13,10 +13,9 @@ dependencies = {
 build = {
    type = "builtin",
    modules = {
-      AddikoAustria = "AddikoAustria.lua",
-      Debug = "Debug.lua",
-      Fidelity = "Fidelity.lua",
-      ["Fidelity NetBenefits"] = "Fidelity NetBenefits.lua",
-      ["Presidential Bank"] = "Presidential Bank.lua"
+      ["Bank of America"] = "extensions/Bank of America.lua",
+      Fidelity = "extensions/Fidelity.lua",
+      ["Presidential Bank"] = "extensions/Presidential Bank.lua",
+      Shareview = "extensions/Shareview.lua"
    }
 }
