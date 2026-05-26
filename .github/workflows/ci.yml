@@ -65,6 +65,12 @@ jobs:
             python3 -m py_compile "$file"
           done < <(git ls-files '*.py')
 
+      - name: External scripts conformance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/test_external_scripts_conformance.py
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
