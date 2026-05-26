@@ -58,7 +58,9 @@ Benutzername bleibt unverändert.
 
 ### Cookie-Export via Tampermonkey (Chrome / Edge / Firefox)
 
-Nur Tampermonkey kann HttpOnly-Cookies lesen (`GM.cookie`).
+⚠️ **Wichtiger Hinweis:** Tampermonkey kann in Safari keine HttpOnly-Cookies lesen. Auch in anderen Browsern kann der Zugriff durch Sicherheitsrichtlinien eingeschränkt sein. Falls der Export via Tampermonkey unvollständig ist (z. B. Login-Fehler in MoneyMoney), nutzen Sie bitte den zuverlässigeren **Cookie-Export via HAR-Datei**.
+
+Nur Tampermonkey kann (außerhalb von Safari) HttpOnly-Cookies lesen (`GM.cookie`).
 
 | Browser | Erweiterung |
 |---------|-------------|
