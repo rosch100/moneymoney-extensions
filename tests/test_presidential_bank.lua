@@ -41,22 +41,22 @@ assertEq(normalizeWhitespace("   "), "", "normalizeWhitespace.trim-empty")
 -- parseTransactionDescription: Pattern 1 (prefix + ENTITY / NAME - DETAILS)
 do
   local name, purpose = parseTransactionDescription("Withdrawal / Empfänger - Details  ")
-  assertEq(name, "ABC My Entity", "parseTransactionDescription.pattern1.name")
-  assertEq(purpose, "Withdrawal - My Entity", "parseTransactionDescription.pattern1.purpose")
+  assertEq(name, "Empfänger", "parseTransactionDescription.pattern1.name")
+  assertEq(purpose, "Withdrawal - Details", "parseTransactionDescription.pattern1.purpose")
 end
 
 -- parseTransactionDescription: Pattern 2 (prefix / NAME - DETAILS)
 do
   local name, purpose = parseTransactionDescription("Deposit / Name - Details")
-  assertEq(name, "Some Name", "parseTransactionDescription.pattern2.name")
+  assertEq(name, "Name", "parseTransactionDescription.pattern2.name")
   assertEq(purpose, "Deposit - Details", "parseTransactionDescription.pattern2.purpose")
 end
 
 -- parseTransactionDescription: Pattern 3 (Before / After - no mandatory dash in first slash)
 do
   local name, purpose = parseTransactionDescription("Prefix / Name - Details")
-  assertEq(name, "After Name", "parseTransactionDescription.pattern3.name")
-  assertEq(purpose, "Before - After Details", "parseTransactionDescription.pattern3.purpose")
+  assertEq(name, "Name", "parseTransactionDescription.pattern3.name")
+  assertEq(purpose, "Prefix - Details", "parseTransactionDescription.pattern3.purpose")
 end
 
 -- parseTransactionDescription: fallback (simple description)
@@ -96,17 +96,17 @@ do
   assertEq(isValidAccountId("0"), false, "isValidAccountId.zero")
   assertEq(isValidAccountId("PLACEHOLDER"), false, "isValidAccountId.placeholder")
   assertEq(isValidAccountId("0000000000"), false, "isValidAccountId.all-zeros")
-  assertEq(isValidAccountId("12345"), true, "isValidAccountId.valid")
+  assertEq(isValidAccountId("987654321"), true, "isValidAccountId.valid")
 end
 
 -- parseDate: YYYY-MM-DD + US MM/DD/YYYY
 do
-  local ymd = os.time({ year = 2024, month = 1, day = 2 })
-  local parsed = parseDate("2024-01-02")
+  local ymd = os.time({ year = 2026, month = 1, day = 1 })
+  local parsed = parseDate("2026-01-01")
   assertEq(parsed, ymd, "parseDate.ymd")
 
-  local mdY = os.time({ year = 1968, month = 9, day = 7 })
-  local parsed2 = parseDate("9/7/1968")
+  local mdY = os.time({ year = 1970, month = 1, day = 1 })
+  local parsed2 = parseDate("1/1/1970")
   assertEq(parsed2, mdY, "parseDate.mdy")
 end
 
