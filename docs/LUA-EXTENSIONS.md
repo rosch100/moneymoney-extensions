@@ -295,26 +295,19 @@ WebBanking{
 
 ### Login-API Limitation
 
-Die MLP-Authentifizierungs-API (`/services_auth/auth-backend/api/authentication/login`) erfordert **JOSE/JWE-verschlüsselte Credentials**:
+Die MLP-Authentifizierungs-API (`/services_auth/auth-backend/api/authentication/login`) erfordert **JOSE/JWE-verschlüsselte Credentials** (`application/jose`, RSA-OAEP-512, A256GCM). Da die Lua-Engine keine native JWE-Unterstützung bietet, ist ein direkter Login technisch nicht möglich.
 
-- **Content-Type:** `application/jose`
-- **Algorithmus:** RSA-OAEP-512 (Key Encipherment)
-- **Encryption:** A256GCM (Content Encryption)
-- **Key ID:** `cas-pin-encryption-prod-v2`
-
-Die Lua-Engine von MoneyMoney bietet keine native Unterstützung für JWE-Verschlüsselung. Ein direkter Login aus MoneyMoney heraus ist daher **technisch nicht möglich**.
-
-**Workaround:** Cookie-Import aus einem authentifizierten Browser-Session.
+**Lösung:** Cookie-Import aus einer authentifizierten Browser-Sitzung.
 
 ### `InitializeSession(protocol, bankCode, username, username2, password, username3)`
 
 `password` mit `COOKIE:`-Präfix → Session-Cookies übernehmen, API-Zugang prüfen.
 
 Erforderliche Cookies für die Vertrags-API (`vue.mlp.de`):
-- `VUSESSIONID` – Session-Token (⚠️ kann mehrfach vorkommen)
+- `VUSESSIONID` – Session-Token (⚠️ kann mehrfach vorkommen - beide kopieren!)
 - `BIGipServervue.mlp.de` – Load-Balancer
 
-Optional (für Consent-Calls):
+Optional (für automatische Sitzungserneuerung via Consent-Call):
 - `CAS_SESSION` – Auth-Session-Token
 - `CAS_DEVICE_SESSION` – Geräte-Token
 
@@ -353,8 +346,10 @@ Pro Wertpapier:
 
 ### Bekannte Einschränkungen
 
-- **Login nur via Cookie-Import möglich** — Direkter Username/Passwort-Login scheitert an JOSE/JWE-Verschlüsselung (API erwartet `application/jose`, nicht nachbildbar in Lua).
-- Keine Beitragszahlungen als Transaktionen sichtbar (nur aktueller Wert).
+- **Login nur via Cookie-Import:** Direkter Login scheitert an JOSE/JWE-Verschlüsselung.
+- **Keine Transaktionen:** Nur aktueller Rückkaufswert/Bestand sichtbar.
+- **Session-Management:** Kein expliziter Logout, um Browser-Sitzung nicht zu stören.
+- **Datenverarbeitung:** Nutzt native `JSON`-Klasse für maximale Stabilität.
 
 ### Tests
 
