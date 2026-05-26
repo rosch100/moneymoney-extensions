@@ -96,7 +96,7 @@ assertEq(isValidDob(1, 1, 2101), false, "isValidDob.year=2101")
 assertEq(isValidDob(nil, 1, 1970), false, "isValidDob.nil.day")
 
 -- Test: parseCurrencyValue (GBX → GBP)
-local amount, native, raw = parseCurrencyValue("GBX|10.0000|99|1|.|,|6")
+local amount, native, raw = parseCurrencyValue("GBX|247.0000|99|1|.|,|6")
 assertNear(amount, 2.47, "parseCurrencyValue.GBX.price.gbp")
 assertEq(native, "GBX", "parseCurrencyValue.GBX.native")
 assertNear(raw, 247.0, "parseCurrencyValue.GBX.raw")
