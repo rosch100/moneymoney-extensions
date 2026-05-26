@@ -384,27 +384,20 @@ lua tests/test_mlp_kundenportal.lua
 
 ---
 ### Lokale Tests
-
-#### Lua-Unit-Tests
 ```bash
 lua tests/test_shareview.lua
 lua tests/test_mlp_kundenportal.lua
-lua tests/test_presidential_bank.lua
-lua tests/test_fidelity_cookie_import.lua
 ```
 
-#### Externe Cookie-Exporter (Konformität)
-```bash
-python3 tests/test_external_scripts_conformance.py
-```
+### CI
+GitHub Actions führt bei jedem Push/Pull Request automatisch aus:
 
-Die Konformität prüft u.a.:
-- keine UTF-8 BOM in Python/JS-Dateien
-- Python-Shebang in `scripts/extract-*.py`
-- Docstring-Struktur (muss „MoneyMoney“ enthalten und eine Usage für `datei.har`)
-- `__version__` im Format `X.Y.Z`
-- `format_cookies` Output-Form (falls vorhanden) muss mit `COOKIE:` starten und `key=value` Paare per `;` enthalten (keine Kommas)
-- das Tampermonkey `.user.js` muss einen gültigen UserScript Header haben und Semikolon-Join für Cookie-Paare nutzen
+- Lua-Unit-Tests (alle `tests/*.lua`)
+- Lua-Syntax-Check (alle `*.lua`)
+- Python-Syntax-Check (alle `*.py`)
+- JavaScript-Syntax-Check (alle `*.js`)
+
+Siehe `.github/workflows/ci.yml`.
 
 ---
 ### Neue Extension hinzufügen
