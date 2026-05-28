@@ -129,5 +129,23 @@ do
   assertEq(result, "Cookie import failed. Please copy fresh cookies from browser.", "InitializeSession.cookie-import.failure.message")
 end
 
+local blockedMsg = directLoginUnavailableMessage()
+assertEq(type(blockedMsg), "string", "directLoginUnavailableMessage.type")
+assertEq(blockedMsg:match("Cookie%-Import") ~= nil, true, "directLoginUnavailableMessage.cookieImport")
+assertEq(blockedMsg:match("WebbankingBrowser") ~= nil, true, "directLoginUnavailableMessage.browser")
+
+do
+  local result = InitializeSession(
+    ProtocolWebBanking,
+    "Fidelity",
+    "myuser",
+    nil,
+    "secretpass",
+    nil
+  )
+  assertEq(type(result), "string", "InitializeSession.direct-login.blocked.type")
+  assertEq(result, blockedMsg, "InitializeSession.direct-login.blocked.message")
+end
+
 print("ALL FIDELITY COOKIE-IMPORT UNIT TESTS PASSED")
 

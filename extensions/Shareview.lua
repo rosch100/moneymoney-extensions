@@ -22,11 +22,7 @@ local CONSTANTS = {
 }
 
 local connection
-local session = { cookies = "" }
-
--- ============================================================================
--- Hilfsfunktionen
--- ============================================================================
+local session = { cookies = "", persistedConnection = false }
 
 local function trim(text)
   if not text then return "" end
@@ -51,7 +47,6 @@ local function stripTags(s)
   return trim(htmlDecode((s:gsub("<[^>]+>", " "):gsub("%s+", " "))))
 end
 
--- DOB-Helper sind global, damit tests/test_shareview.lua sie direkt aufrufen kann.
 function parseDobString(raw)
   if not raw then return nil, nil, nil end
   local d, m, y = trim(raw):match("^(%d+)[%./%-](%d+)[%./%-](%d+)$")
@@ -67,7 +62,6 @@ function isValidDob(day, month, year)
   return true
 end
 
--- Username + optionales "|TT.MM.JJJJ" parsen. DOB nil -> Multi-Step-Abfrage.
 function parseUsernameDob(rawUsername)
   if not rawUsername or rawUsername == "" then return nil end
   local user, dob = rawUsername:match("^([^|]+)|(.+)$")
@@ -75,8 +69,6 @@ function parseUsernameDob(rawUsername)
   return trim(user), parseDobString(dob)
 end
 
--- Currency-Format aus Shareview-HTML, z.B. "GBX|10.0000|99|1|.|,|6".
--- Rückgabe: amountInGbp, nativeCurrency, nativeAmount.
 function parseCurrencyValue(raw)
   if not raw then return nil, nil, nil end
   local parts = {}
@@ -95,12 +87,6 @@ local function normalizeCurrency(c)
   return c
 end
 
--- Form-Submit über die MoneyMoney-HTML/XPath-API.
--- Connection:request liefert (content, charset, mimeType, filename, headers).
--- Wir geben nur `content` zurück, damit die Caller mit (content, err) sicher
--- destrukturieren koennen — sonst landet "utf-8" als zweiter Rueckgabewert
--- und wird als Fehlertext interpretiert.
--- Wenn die XPath-Suche leer ist: nil + Fehlertext.
 local function submitForm(formNode)
   if not formNode or formNode:length() == 0 then
     return nil, "Form-Element nicht gefunden (XPath traf nicht)."
@@ -109,10 +95,6 @@ local function submitForm(formNode)
   return content
 end
 
--- MFA-Challenge-Table fuer InitializeSession2; einheitlich fuer Initial-Frage
--- und Retry. MoneyMoney ruft InitializeSession2 mit step=N+1 erneut auf, wenn
--- ein Challenge-Table (statt eines Fehler-Strings) zurueckgegeben wird.
--- Siehe Web Banking API, "Anmeldung mit Zwei-Faktor-Authentifizierung".
 local function mfaChallenge(text)
   return {
     title     = "Shareview Authentifizierung",
@@ -121,22 +103,35 @@ local function mfaChallenge(text)
   }
 end
 
--- ============================================================================
--- WebBanking-Lifecycle
--- ============================================================================
-
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Shareview"
 end
 
--- Step 1 erhält {username, password} aus dem Keychain. Folge-Steps werden
--- state-basiert dispatcht, weil zwischen Step 1 und MFA optional ein
--- DOB-Step liegt (wenn der Username keinen "|TT.MM.JJJJ"-Suffix enthält).
 function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   if step == 1 then
-    connection = Connection()
+    local storage = rawget(_G, "LocalStorage")
+    local rawUsername = credentials and credentials[1] or ""
+    local accountKey = rawUsername or ""
+    local canReuse = storage and storage.connection and storage.connectionAccountKey == accountKey
+    if canReuse then
+      connection = storage.connection
+      session.persistedConnection = true
+    else
+      connection = Connection()
+      if storage then
+        storage.connection = connection
+        storage.connectionAccountKey = accountKey
+        session.persistedConnection = true
+      end
+    end
     connection.language = "en-GB"
     connection.useragent = CONSTANTS.userAgent
+
+    local holdings = connection:get(CONSTANTS.holdingsUrl)
+    if holdings and holdings ~= "" and isLoggedInPage(holdings) then
+      session.holdingsHtmlString = holdings
+      return nil
+    end
     return loginStep1(credentials, interactive)
   end
   if session.awaitingDob then return submitDobAndLogin(credentials[1]) end
@@ -190,9 +185,7 @@ function submitDobAndLogin(dobRaw)
   return submitCredentials(username, password, day, month, year)
 end
 
--- Login-POST via HTML/XPath. Bei Erfolg: setzt session.awaitingMfa.
 function submitCredentials(username, password, day, month, year)
-  MM.printStatus("Shareview: Zugangsdaten senden...")
   local content = connection:get(CONSTANTS.loginUrl)
   if not content or content == "" then
     return "Login fehlgeschlagen: Login-Seite nicht erreichbar."
@@ -200,19 +193,15 @@ function submitCredentials(username, password, day, month, year)
 
   local html = HTML(content)
 
-  -- ASP.NET-WebForms: die `id`-Attribute enthalten dynamische GUIDs, daher
-  -- per `contains(@id, "...")`-Substring-Match auf die stabilen Suffixe.
   html:xpath('//input[contains(@id, "UserLocate2UC1_rpt_ctl00_txtInput")]'):attr("value", username)
   html:xpath('//input[contains(@id, "UserLocate2UC1_rpt_ctl02_txtInput")]'):attr("value", password)
   html:xpath('//select[contains(@id, "drpDay")]/option[@value="'   .. day   .. '"]'):attr("selected", "selected")
   html:xpath('//select[contains(@id, "drpMonth")]/option[@value="' .. month .. '"]'):attr("selected", "selected")
   html:xpath('//select[contains(@id, "drpYear")]/option[@value="'  .. year  .. '"]'):attr("selected", "selected")
 
-  -- ASP.NET-Postback: __EVENTTARGET = Name des Locate-Buttons
   local locateBtn = html:xpath('//input[contains(@id, "btnLocate") or contains(@name, "btnLocate")]'):attr("name")
   html:xpath('//input[@name="__EVENTTARGET"]'):attr("value", locateBtn or "")
 
-  -- Die Form wird per name selektiert (id ist dynamisch, z.B. "ctl31").
   local mfaContent, submitErr = submitForm(html:xpath('//form[@name="aspnetForm"]'))
   if submitErr then return "Login fehlgeschlagen: " .. submitErr end
   if not mfaContent or mfaContent == "" then
@@ -240,7 +229,6 @@ function submitMfaCode(credentials)
 
   local code = credentials[1]
   if not code or not code:match("^%s*%d+%s*$") then
-    -- Format-Fehler: MFA-State erhalten, User soll Code erneut eingeben.
     return mfaChallenge("Ungültiger Authentication Code (nur Ziffern). Bitte erneut eingeben.")
   end
   code = trim(code)
@@ -250,7 +238,6 @@ function submitMfaCode(credentials)
   local submitBtn = mfaHtml:xpath('//input[contains(@id, "btnSubmitOtp") or contains(@name, "btnSubmitOtp")]'):attr("name")
   mfaHtml:xpath('//input[@name="__EVENTTARGET"]'):attr("value", submitBtn or "")
 
-  MM.printStatus("Shareview: Authentication Code senden...")
   local otpResponse, submitErr = submitForm(mfaHtml:xpath('//form[@name="aspnetForm"]'))
 
   if submitErr then
@@ -264,16 +251,12 @@ function submitMfaCode(credentials)
     return "MFA fehlgeschlagen: Keine Antwort vom Server."
   end
 
-  -- OTP abgelehnt: aktualisierte MFA-Page (mit frischem VIEWSTATE) als Basis
-  -- fuer den naechsten Versuch behalten und Retry-Challenge zurueckgeben,
-  -- statt den gesamten Login abzubrechen.
   if otpResponse:match("Please enter a 6 digit Authentication Code")
      or otpResponse:match('id="otpErrorLabelWrapper"[^>]*>%s*<span>') then
     session.mfaHtmlString = otpResponse
     return mfaChallenge("Authentication Code abgelehnt. Bitte erneut versuchen.")
   end
 
-  -- Erfolg: MFA-State raeumen, Federation-Hops + Holdings-Check.
   session.awaitingMfa = false
   session.mfaHtmlString = nil
   otpResponse = followFederationHops(otpResponse, 5)
@@ -284,15 +267,9 @@ function submitMfaCode(credentials)
     return nil
   end
 
-  -- Fallback: Federation/Holdings haben nicht angeschlagen — Konto eventuell
-  -- gesperrt (Shareview sperrt nach mehreren OTP-Fehlern temporaer). Hier
-  -- ist Retry sinnlos, kompletter Restart noetig.
   return "MFA fehlgeschlagen. Bitte Anmeldung erneut starten; bei wiederholten Fehlversuchen kann das Konto temporaer gesperrt sein."
 end
 
--- ADFS / WS-Federation-Pages enthalten <form name="hiddenform">, die der
--- Browser per document.forms[0].submit() automatisch absendet. Wir machen
--- dasselbe per :submit(), bis keine Auto-Post-Page mehr kommt.
 function followFederationHops(content, maxHops)
   for _ = 1, (maxHops or 5) do
     if not content or content == "" then return content end
@@ -310,10 +287,6 @@ function followFederationHops(content, maxHops)
   end
   return content
 end
-
--- ============================================================================
--- Cookie-Import-Modus (Passwort beginnt mit "COOKIE:")
--- ============================================================================
 
 function loginWithImportedCookies(cookieString)
   local formatted = trim(cookieString)
@@ -341,10 +314,6 @@ function loginWithImportedCookies(cookieString)
   session.holdingsHtmlString = response
   return nil
 end
-
--- ============================================================================
--- Login-Status / Fehler-Erkennung
--- ============================================================================
 
 function isLoggedInPage(content)
   if not content then return false end
@@ -377,10 +346,6 @@ function extractLoginError(htmlNode)
   end
   return nil
 end
-
--- ============================================================================
--- ListAccounts / RefreshAccount
--- ============================================================================
 
 function ListAccounts(knownAccounts)
   if not session.holdingsHtmlString then
@@ -498,16 +463,18 @@ function parseHoldingRow(row)
   }
 end
 
--- ============================================================================
--- EndSession
--- ============================================================================
-
 function EndSession()
+  local wasPersisted = session.persistedConnection == true
+  local storage = rawget(_G, "LocalStorage")
   if connection then
-    pcall(function() connection:get(CONSTANTS.logoutUrl) end)
+    if not wasPersisted then
+      pcall(function() connection:get(CONSTANTS.logoutUrl) end)
+    end
   end
-  session = { cookies = "" }
+  session = { cookies = "", persistedConnection = false }
   connection = nil
+  if storage ~= nil and not wasPersisted then
+    storage.connection = nil
+    storage.connectionAccountKey = nil
+  end
 end
-
--- SIGNATURE: <unsigned>

@@ -2,169 +2,99 @@
 
 Inoffizielle Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 
-## Extensions
+## Übersicht
 
-| Datei | Service | Login |
-|-------|---------|-------|
-| `extensions/Bank of America.lua` | Bank of America | Cookie-Import |
-| `extensions/Fidelity.lua` | Fidelity Investments | Cookie-Import |
-| `extensions/Presidential Bank.lua` | Presidential Bank | Cookie-Import |
-| `extensions/Shareview.lua` | Equiniti Shareview Portfolio (UK) | Direct-Login (Username + Passwort + Geburtsdatum + MFA) |
-| `extensions/MLP Versicherungen.lua` | MLP Versicherungen | Cookie-Import (Login-API erfordert JOSE/JWE-Verschlüsselung) |
+| Extension | Version | Login | Status |
+|-----------|---------|-------|--------|
+| [Bank of America](extensions/Bank%20of%20America.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Browser-Fingerprint) |
+| [Fidelity](extensions/Fidelity.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
+| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import | JWE-Login blockiert (`MM.aes256gcm` fehlt) |
+| [Presidential Bank](extensions/Presidential%20Bank.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
+| [Shareview](extensions/Shareview.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
 
-Cookie-Import ist bei den US-Banken und MLP erforderlich, da deren Web-Login Mechanismen nutzt (RSA-Verschlüsselung, Akamai-Bot-Schutz, JOSE/JWE), die in der Lua-Engine ohne Browser-Runtime nicht nachgebildet werden können. Shareview unterstützt Direct-Login mit MFA.
+**Beta (0.9):** Nur Cookie-Import aus einer Browser-Session. Kein Direct-Login mit Benutzername/Passwort.
+
+**MLP Bank vs. MLP Versicherungen:** FinTS-Giro (MLP Bank) ist ein separates MoneyMoney-Produkt. Diese Extension deckt nur Versicherungsverträge über `vue.mlp.de` ab.
+
+Details pro Extension: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
 
 ## Installation
 
-1. `.lua` aus `extensions/` nach
-   `~/Library/Containers/com.moneymoney-app.retail/Data/Library/Application Support/MoneyMoney/Extensions/`
-2. In MoneyMoney die Signaturprüfung für Extensions deaktivieren, neu starten.
+1. `.lua` nach `~/Library/Containers/com.moneymoney-app.retail/Data/Library/Application Support/MoneyMoney/Extensions/` kopieren
+2. Signaturprüfung in MoneyMoney deaktivieren, App neu starten
 
-## Shareview-Login
+## Cookie-Import (Beta-Extensions)
 
-| Feld | Eingabe |
-|------|---------|
-| Benutzername | `username` oder `username\|TT.MM.JJJJ` |
-| Passwort | Shareview-Passwort |
-| Geburtsdatum | nur Multi-Step: wird abgefragt, falls nicht im Benutzernamen enthalten |
-| MFA-Code | 6-stellig aus Shareview-App oder E-Mail (von MoneyMoney abgefragt) |
-
-Mit Pipe-Suffix (`name|01.01.1970`) speichert MoneyMoney das Geburtsdatum im Keychain. Nur diese Variante funktioniert für automatische Background-Syncs; ohne Pipe-Suffix fragt MoneyMoney das Geburtsdatum bei jedem Login interaktiv ab.
-
-Bei falsch eingegebenem MFA-Code fragt MoneyMoney nur den Code erneut ab — Benutzername, Passwort und Geburtsdatum bleiben erhalten. Drei aufeinanderfolgende Fehleingaben sperren das Konto bei Shareview temporär.
-
-## MLP Versicherungen-Login
-
-| Feld | Eingabe | Hinweis |
-|------|---------|---------|
-| Benutzername | (leer lassen) | Bei Cookie-Import |
-| Passwort | `COOKIE:name=value;...` | Siehe Cookie-Import unten |
-| ODER Benutzername | MLP Benutzerkennung | Falls Username/Passwort versucht werden soll |
-| ODER Passwort | MLP Passwort | Extension versucht automatisch Cookie-Fallback bei JOSE-Fehler |
-
-**Hinweis:** Die MLP-Login-API erwartet Credentials im **JOSE/JWE-Format** (RSA-OAEP-512 mit A256GCM). Diese clientseitige Verschlüsselung ist in Lua nicht nachbildbar. Daher wird **Cookie-Import empfohlen**.
-
-**Benötigte Cookies:** `VUSESSIONID` (von `vue.mlp.de`), `BIGipServervue.mlp.de`. Optional für Sitzungserneuerung: `CAS_SESSION`, `CAS_S_SESSION`, `CAS_DEVICE_SESSION`.
-
-## Cookie-Import (BoA, Fidelity, Presidential, MLP)
-
-Cookies aus eingeloggtem Browser exportieren und im MoneyMoney-Passwortfeld als Wert mit `COOKIE:`-Präfix eintragen:
+Passwortfeld in MoneyMoney:
 
 ```
 COOKIE:name=value;name2=value2
 ```
 
-Benutzername bleibt unverändert.
+Benutzername ist bei Beta-Extensions irrelevant.
 
-### Cookie-Export via Tampermonkey (Chrome / Edge / Firefox)
+### Ablauf
 
-⚠️ **Wichtiger Hinweis:** Tampermonkey kann in Safari keine HttpOnly-Cookies lesen. Auch in anderen Browsern kann der Zugriff durch Sicherheitsrichtlinien eingeschränkt sein. Falls der Export via Tampermonkey unvollständig ist (z. B. Login-Fehler in MoneyMoney), nutzen Sie bitte den zuverlässigeren **Cookie-Export via HAR-Datei**.
+1. Im Browser vollständig einloggen (inkl. MFA)
+2. Kontoseite / Vertragsübersicht öffnen
+3. Cookies exportieren (HAR oder Tampermonkey)
+4. `COOKIE:…`-String als Passwort einfügen
 
-Nur Tampermonkey kann (außerhalb von Safari) HttpOnly-Cookies lesen (`GM.cookie`).
+Session wird in `LocalStorage` persistiert; Folge-Syncs nutzen gespeicherte Cookies, solange die Session gültig ist.
 
-| Browser | Erweiterung |
-|---------|-------------|
-| Chrome | [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) |
-| Edge | [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) |
-| Firefox | [Tampermonkey](https://addons.mozilla.org/firefox/addon/tampermonkey/) |
-| Safari | [Tampermonkey](https://apps.apple.com/app/tampermonkey/id1482490089) — HttpOnly blockiert ([#2252](https://github.com/Tampermonkey/tampermonkey/issues/2252)) |
+### Export per HAR
 
-In Tampermonkey: **Erweitert → Sicherheit → Cookie-Zugriff: Alle**.
+DevTools → Network → **Save all as HAR**, dann:
 
-1. `scripts/moneymoney-cookie-exporter.user.js` installieren.
-2. Bei der Bank einloggen, passende Seite öffnen:
-   - BoA: `secure.bankofamerica.com` (Kontoübersicht)
-   - Fidelity: `digital.fidelity.com`
-   - Presidential: `www.presidentialpcbanking.com`
-3. **Alt+C** → Cookies kopieren → in MoneyMoney als Passwort einfügen.
+| Bank | Befehl | Wichtige Cookies |
+|------|--------|------------------|
+| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN` |
+| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | `ATC`, `FC`, `RC`, `SC`, `MC`, `_abck`, `bm_*` |
+| MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` | `VUSESSIONID` von `vue.mlp.de` |
 
-### Cookie-Export via HAR-Datei (alle Browser)
+### Fidelity: dauerhafte Session
 
-Falls Tampermonkey nicht verfügbar ist (z. B. in Safari) oder nicht alle Cookies erfasst, können die Cookies aus einer HAR-Datei (HTTP Archive) extrahiert werden.
+Nach SMS-MFA **„Don't ask me again on this device“** aktivieren, erst nach **Portfolio Summary** exportieren.
 
-1.  Im Browser bei der Bank anmelden.
-2.  **Wichtig:** Die Seite mit den Kontodaten bzw. der Vertragsübersicht öffnen.
-3.  DevTools öffnen (**F12** oder **Cmd+Alt+I**) → Tab **Network**.
-4.  Seite neu laden (optional, um alle Cookies im Flow zu sehen).
-5.  Rechtsklick in die Liste der Netzwerkanfragen → **Save all as HAR**.
-6.  Passendes Skript aus dem `scripts/`-Ordner ausführen:
+### MLP: Vue-Session
 
-| Bank / Service | Befehl |
-|----------------|--------|
-| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` |
-| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` |
-| Presidential Bank | `python3 scripts/extract-presidential-cookies.py export.har` |
-| MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` |
-| Shareview (Fallback) | `python3 scripts/extract-shareview-cookies.py export.har` |
+Vertragsübersicht auf `vue.mlp.de` öffnen, bevor exportiert wird. Beim ersten Zugriff SSL-Zertifikat für `vue.mlp.de` in MoneyMoney bestätigen.
 
-Das Skript gibt den fertigen `COOKIE:...`-String aus und kopiert ihn (unter macOS) automatisch in die Zwischenablage. Diesen Wert in MoneyMoney als Passwort einfügen.
+### Tampermonkey (optional)
 
-Cookies nach dem Login zeitnah exportieren — die Session läuft sonst ab.
+`scripts/moneymoney-cookie-exporter.user.js` — **Alt+C** auf der Kontoseite. In Safari keine HttpOnly-Cookies; dann HAR verwenden.
 
-### MLP Versicherungen
+## Direct-Login (Presidential Bank, Shareview)
 
-**Hinweis:** Diese Extension unterstützt ausschließlich **Versicherungsverträge**. Bank-Produkte werden separat abgedeckt.
+### Presidential Bank
 
-Da der MLP-Login eine clientseitige **JOSE/JWE-Verschlüsselung** erfordert, ist ein direkter Login in Lua nicht möglich. **Cookie-Import wird zwingend empfohlen.**
+Username + Passwort → MFA (SMS, E-Mail, Voice oder TOTP). Session in `LocalStorage`; privates Gerät (`MAF_IB_*`) verlängert die Laufzeit.
 
-**⚠️ SSL-Zertifikat bestätigen**
-Beim ersten Zugriff muss das SSL-Zertifikat für `vue.mlp.de` in MoneyMoney dauerhaft bestätigt werden.
+### Shareview
 
-**Benötigte Cookies (nur für Vue API):**
+Username + Passwort + Geburtsdatum + MFA. Für Background-Sync: `username|TT.MM.JJJJ` als Benutzername (Geburtsdatum im Keychain).
 
-| Cookie | Domain | Zweck |
-|--------|--------|-------|
-| **`VUSESSIONID`** ⚠️ | **`vue.mlp.de`** | **Session (ERFORDERLICH)** |
-| `BIGipServervue.mlp.de` | `vue.mlp.de` | Load-Balancer |
+## Fehlende Engine-Funktionen
 
-**Wichtig:** `VUSESSIONID` wird nur unter der Domain **`vue.mlp.de`** gesetzt. Öffnen Sie im Browser zwingend die **Vertragsübersicht**, bevor Sie die Cookies exportieren. Falls `VUSESSIONID` mehrfach vorkommt, kopieren Sie alle Werte.
-
-**1. Tampermonkey (empfohlen):**
-`scripts/moneymoney-cookie-exporter.user.js` nutzen. Nach dem Login die Vertragsübersicht öffnen, dann "Cookies kopieren".
-
-**2. HAR-Export:**
-Siehe oben unter "Cookie-Export via HAR-Datei".
-
-**3. Manuelles Kopieren:**
-DevTools → Application → Cookies → `https://vue.mlp.de`: Alle `VUSESSIONID` und `BIGipServervue.mlp.de` kopieren.
+Warum die Beta-Extensions keinen Direct-Login unterstützen und welche Engine-APIs fehlen: [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md). Extension-Funktionen (Cookie-Import, Kontenabruf): [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
 
 ## Entwicklung
 
-Extensions sind unsigniert — in MoneyMoney die Signaturprüfung deaktivieren. Alle Extensions in `extensions/` verwenden `version = 1.00`.
-
-Lokal wie in CI: **Lua 5.4**, **Python 3.11**, **Node 24**.
-
-### Lokale Tests
+Lokal: Lua 5.4, Python 3.11.
 
 ```bash
-# Alle Lua-Unit-Tests
 for f in tests/*.lua; do lua "$f"; done
-
-# Cookie-Exporter (scripts/extract-*.py, Tampermonkey .user.js)
 python3 tests/test_external_scripts_conformance.py
 ```
 
-Getrackte Lua-Tests: `test_shareview.lua`, `test_mlp_kundenportal.lua`, `test_presidential_bank.lua`, `test_fidelity_cookie_import.lua`.
+CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
-### CI
+## API-Dokumentation
 
-Bei Push und Pull Request laufen vier GitHub-Actions-Workflows:
-
-| Workflow | Datei | Prüfungen |
-|----------|-------|-----------|
-| Extension tests | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Lua-Unit-Tests (`tests/*.lua`), Lua-Syntax (`*.lua`), Python-Syntax (`*.py`), JavaScript-Parse-Check (`*.js`) |
-| MoneyMoney Script Conformance | [`.github/workflows/moneymoney-script-conformance.yml`](.github/workflows/moneymoney-script-conformance.yml) | `tests/test_external_scripts_conformance.py` |
-| Lua rockspec build | [`.github/workflows/lua-rockspec.yml`](.github/workflows/lua-rockspec.yml) | `luarocks make moneymoney-dev-1.rockspec` |
-| Security | [`.github/workflows/security.yml`](.github/workflows/security.yml) | gitleaks (Secrets), bandit (Python SAST in `scripts/`, `tests/`) |
-
-Der Security-Workflow läuft zusätzlich wöchentlich per Cron.
-
-Details pro Extension: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
-
-## API-Referenz
-
-Pro Extension: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
-Engine-Spezifikation: [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/).
+| Dokument | Inhalt |
+|----------|--------|
+| [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
+| [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Fehlende Engine-APIs (Beta-Extensions) |
 
 ## Lizenz
 

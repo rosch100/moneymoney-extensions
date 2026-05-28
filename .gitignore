@@ -12,6 +12,9 @@
 *.har
 *_cookies.txt
 
+# Lokale Reverse-Engineering-Referenz (nicht veröffentlichen)
+/docs/UNDOCUMENTED-MM-LUA-API.md
+
 # Nur Dateien aus extensions/, scripts/, docs/ und tests/ ins Repo,
 # Lua-Dateien im Root ausschließen (Entwicklungs-Scratch).
 /*.lua

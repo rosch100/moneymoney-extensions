@@ -1,15 +1,15 @@
 --
--- Fidelity Investments — MoneyMoney Web Banking Extension
+-- Fidelity Investments — MoneyMoney Web Banking Extension (Beta 0.9, Cookie-Import)
 -- https://www.fidelity.com
 -- Dokumentation: docs/LUA-EXTENSIONS.md
 -- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking{
-  version     = 1.00,
+  version     = 0.90,
   url         = "https://www.fidelity.com",
   services    = {"Fidelity"},
-  description = "Fidelity Investments - GraphQL, Cookie Import"
+  description = "Fidelity Investments — Beta (Cookie-Import)"
 }
 
 local CONSTANTS = {
@@ -25,32 +25,87 @@ local CONSTANTS = {
 }
 
 local connection
-local session = { cookies = "" }
+local session = { cookies = "", persistedConnection = false }
 
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and (bankCode == "Fidelity" or bankCode == "Fidelity Investments")
 end
 
 function InitializeSession(protocol, bankCode, username, username2, password, username3)
-  connection = Connection()
+  local storage = rawget(_G, "LocalStorage")
+  local accountKey = username or ""
+  local canReuse =
+    storage and storage.connection and storage.connectionAccountKey == accountKey
+
+  if canReuse then
+    connection = storage.connection
+    session.persistedConnection = true
+  else
+    connection = Connection()
+    if storage then
+      storage.connection = connection
+      storage.connectionAccountKey = accountKey
+      session.persistedConnection = true
+    else
+      session.persistedConnection = false
+    end
+  end
+
+  -- Apply in case we reused an existing connection object.
   connection.language = "en-US"
   connection.useragent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+
+  -- If persisted cookies are still valid, skip the bot-protected login flow.
+  session.cookies = connection:getCookies() or ""
+  if session.cookies ~= "" and (session.cookies:match("ATC") or session.cookies:match("ET")) then
+    local testHeaders = {
+      ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      ["Accept-Language"] = "en-US,en;q=0.9",
+      ["Cookie"] = session.cookies
+    }
+    local testResponse = connection:request("GET", CONSTANTS.portfolioSummary, nil, nil, testHeaders)
+    if testResponse and (testResponse:match("portfolio") or testResponse:match("Portfolio Summary")) then
+      return nil
+    end
+  end
 
   -- Cookie import mode
   if password and password:match("^COOKIE:") then
     return loginWithImportedCookies(password:sub(8))
   end
 
+  if username == "" or password == "" or username == nil or password == nil then
+    return "Cookie-Import erforderlich: Passwort = COOKIE:ATC=...;ET=...\n\n"
+      .. directLoginUnavailableMessage()
+  end
+
+  return directLoginUnavailableMessage()
+end
+
+function directLoginUnavailableMessage()
+  return "Direct-Login (Username/Passwort) ist in Lua ohne Browser-Runtime nicht möglich.\n\n"
+    .. "Fidelity schützt die Login-API (ecaap.fidelity.com) mit Akamai Bot Manager "
+    .. "(_abck, bm_* Cookies) und Multi-Faktor-Authentifizierung — "
+    .. "nicht nachbaubar per reinem HTTP.\n\n"
+    .. "Cookie-Import (empfohlen):\n"
+    .. "1. Im Browser bei digital.fidelity.com einloggen (inkl. MFA)\n"
+    .. "2. Cookies exportieren (HAR oder Tampermonkey)\n"
+    .. "3. MoneyMoney Passwort: COOKIE:ATC=...;ET=...\n\n"
+    .. "HAR: python3 scripts/extract-fidelity-cookies.py login.har\n\n"
+    .. "Für Direct-Login fehlt die Engine-API WebbankingBrowser.\n"
+    .. "Details: docs/ENGINE-API-GAPS.md#fidelity"
+end
+
+-- Für künftige WebbankingBrowser-Anbindung; derzeit nicht aufgerufen (Akamai/MFA).
+function performFidelityPasswordLogin(username, password)
   MM.printStatus("Logging in to Fidelity...")
 
-  -- Load login page
   local _, _ = connection:request("GET", "https://digital.fidelity.com/prgw/digital/signin/retail", nil, nil, {
     ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     ["Accept-Language"] = "en-US,en;q=0.9"
   })
   session.cookies = connection:getCookies() or ""
 
-  -- Login with credentials
   local loginBody = JSON():set({
     username = username,
     password = password,
@@ -76,7 +131,6 @@ function InitializeSession(protocol, bankCode, username, username2, password, us
     return "Login failed: No response from server"
   end
 
-  -- Parse response
   if mimeType and mimeType:find("json") then
     local success, jsonData = pcall(function() return JSON(loginResponse):dictionary() end)
     if success and jsonData then
@@ -95,7 +149,6 @@ function InitializeSession(protocol, bankCode, username, username2, password, us
     end
   end
 
-  -- Check for session cookies
   if session.cookies:match("ATC") or session.cookies:match("ET") then
     MM.printStatus("Login successful")
     return nil
@@ -344,7 +397,9 @@ function RefreshAccount(account, since)
 end
 
 function EndSession()
-  if session.cookies and session.cookies ~= "" then
+  -- If we keep a persisted connection in LocalStorage, avoid logging out,
+  -- otherwise we would invalidate the session cookie jar.
+  if session.cookies and session.cookies ~= "" and not session.persistedConnection then
     pcall(function()
       connection:request("GET", CONSTANTS.logoutUrl, nil, nil, { ["Cookie"] = session.cookies })
     end)
