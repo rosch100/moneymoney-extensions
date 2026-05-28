@@ -1,6 +1,6 @@
 # MoneyMoney Extensions
 
-Inoffizielle Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
+Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 
 ## Übersicht
 
