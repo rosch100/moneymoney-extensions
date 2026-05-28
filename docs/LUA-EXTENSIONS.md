@@ -48,7 +48,7 @@ WebBanking{
 - **RefreshAccount** — Umsätze ab `since` aus Activity-Seiten
 - **Kontoauszüge** — PDF via `GetAvailableStatements` / `GetStatement`
 
-Direct-Login blockiert (Browser-Fingerprint). Details: [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md#bank-of-america).
+Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
@@ -70,7 +70,7 @@ WebBanking{
 | Kontotyp | `AccountTypePortfolio` |
 | Login | `COOKIE:ATC=…;FC=…;RC=…;SC=…;MC=…` (+ Akamai `_abck`, `bm_*`) |
 
-Direct-Login blockiert (Akamai + MFA). Details: [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md#fidelity).
+Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ### API-Funktionen
 
@@ -97,7 +97,7 @@ WebBanking{
 | Kontotyp | `AccountTypePortfolio` (Versicherungsdepots) |
 | Login | `COOKIE:VUSESSIONID=…;BIGipServervue.mlp.de=…` |
 
-Cookies von **`vue.mlp.de`** nach Öffnen der Vertragsübersicht. JWE-Login blockiert ohne `MM.aes256gcm`. Details: [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md#mlp-versicherungen).
+Cookies von **`vue.mlp.de`** nach Öffnen der Vertragsübersicht. JWE-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ### API-Funktionen
 
