@@ -74,9 +74,13 @@ Username + Passwort → MFA (SMS, E-Mail, Voice oder TOTP). Session in `LocalSto
 
 Username + Passwort + Geburtsdatum + MFA. Für Background-Sync: `username|TT.MM.JJJJ` als Benutzername (Geburtsdatum im Keychain).
 
-## Fehlende Engine-Funktionen
+## Dokumentation
 
-Warum die Beta-Extensions keinen Direct-Login unterstützen und welche Engine-APIs fehlen: [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md). Extension-Funktionen (Cookie-Import, Kontenabruf): [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
+| Dokument | Inhalt |
+|----------|--------|
+| [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
+| [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Extensions (Login, Cookie-Import, Abruf) |
+| [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Fehlende Engine-APIs für Direct-Login |
 
 ## Entwicklung
 
@@ -88,13 +92,6 @@ python3 tests/test_external_scripts_conformance.py
 ```
 
 CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-
-## API-Dokumentation
-
-| Dokument | Inhalt |
-|----------|--------|
-| [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
-| [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Fehlende Engine-APIs (Beta-Extensions) |
 
 ## Lizenz
 

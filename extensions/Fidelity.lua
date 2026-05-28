@@ -93,7 +93,7 @@ function directLoginUnavailableMessage()
     .. "3. MoneyMoney Passwort: COOKIE:ATC=...;ET=...\n\n"
     .. "HAR: python3 scripts/extract-fidelity-cookies.py login.har\n\n"
     .. "Für Direct-Login fehlt die Engine-API WebbankingBrowser.\n"
-    .. "Details: docs/ENGINE-API-GAPS.md#fidelity"
+    .. "Details: docs/ENGINE-API-GAPS.md"
 end
 
 -- Für künftige WebbankingBrowser-Anbindung; derzeit nicht aufgerufen (Akamai/MFA).
