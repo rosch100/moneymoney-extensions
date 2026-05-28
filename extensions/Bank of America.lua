@@ -1,25 +1,215 @@
 --
--- Bank of America — MoneyMoney Web Banking Extension
+-- Bank of America — MoneyMoney Web Banking Extension (Beta 0.9, Cookie-Import)
 -- https://www.bankofamerica.com
 -- Dokumentation: docs/LUA-EXTENSIONS.md
 -- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking{
-  version     = 1.00,
+  version     = 0.90,
   url         = "https://secure.bankofamerica.com",
   services    = {"Bank of America"},
-  description = "Bank of America - Cookie Import"
+  description = "Bank of America — Beta (Cookie-Import)"
 }
 
 local CONSTANTS = {
   baseUrl = "https://secure.bankofamerica.com",
   bankCode = "BOA",
-  userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15"
+  userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+  loginPartnerId = "7AB3CF1341CA460A84D1167C04F8F5E4",
+  loginInitContainerUrl = "https://secure.bankofamerica.com/login/rest/sas/sparta/ls/entry/v2/initContainer",
+  loginInitAuthUrl = "https://secure.bankofamerica.com/ahloginws/rest/sas/sparta/ls/v2/initAuthentication",
+  loginVerifyUrl = "https://secure.bankofamerica.com/ahloginws/rest/sas/sparta/ls/v2/verifyAuthentication",
+  loginStepUpUrl = "https://secure.bankofamerica.com/ahloginws/rest/sas/sparta/ls/secure/v3/initiateStepUp",
+  loginSendCodeUrl = "https://secure.bankofamerica.com/ahloginws/rest/sas/sparta/ls/secure/v2/sendCode",
+  loginValidateCodeUrl = "https://secure.bankofamerica.com/ahloginws/rest/sas/sparta/ls/secure/v2/validateCode",
+  loginSignInGoUrl = "https://secure.bankofamerica.com/myaccounts/signin/signIn.go?returnSiteIndicator=GAIEC&langPref=en-us&request_locale=en-us&capturemode=N&newuser=false",
+  signOnScreenUrl = "https://secure.bankofamerica.com/login/sign-in/signOnV2Screen.go",
+  signOnPostUrl = "https://secure.bankofamerica.com/login/sign-in/internal/entry/signOnV2.go",
+  signOnSuccessUrl = "https://secure.bankofamerica.com/login/sign-in/signOnSuccessRedirect.go",
+  authCodeInitUrl = "https://secure.bankofamerica.com/login/authcode/authCodeInitialize.go?acw_page_id=VIPAA-OTP-ELECTIVE&inScript=true",
+  authCodeDisplayUrl = "https://secure.bankofamerica.com/login/authcode/authcodeDisplay.go",
+  sendAuthCodeUrl = "https://secure.bankofamerica.com/login/authcode/sendAuthCode.go",
+  validateAuthCodeUrl = "https://secure.bankofamerica.com/login/authcode/validateAuthCode.go",
+  validateChallengeUrl = "https://secure.bankofamerica.com/login/sign-in/validateChallengeAnswerV2.go",
+  loginReferer = "https://secure.bankofamerica.com/login/sign-in/signOnV2Screen.go",
+  loginOrigin = "https://secure.bankofamerica.com",
 }
 
 local connection
-local session = { cookies = "", adxToken = "", statementPageUrl = "" }
+local session = { cookies = "", adxToken = "", statementPageUrl = "", persistedConnection = false }
+
+local DEBUG_PREFIX = "BoA-DEBUG:"
+
+function boaDebugLog(message)
+  if type(message) ~= "string" or message == "" then
+    return
+  end
+  if MM and type(MM.printStatus) == "function" then
+    MM.printStatus(DEBUG_PREFIX .. " " .. message)
+  end
+end
+
+function boaDebugShortUrl(url)
+  if type(url) ~= "string" then
+    return "(keine URL)"
+  end
+  local path = url:match("^https?://[^/]+(.+)$")
+  if path then
+    return path
+  end
+  return url
+end
+
+function boaDebugLen(value)
+  if type(value) ~= "string" then
+    return 0
+  end
+  return #value
+end
+
+function boaDebugSummarizeCredentials(username, password)
+  local userLen = boaDebugLen(username)
+  local passLen = boaDebugLen(password)
+  local parts = {
+    "credentials: onlineId.len=" .. tostring(userLen),
+    "passcode.len=" .. tostring(passLen),
+  }
+  if userLen == 0 then
+    table.insert(parts, "WARN onlineId leer")
+  end
+  if passLen == 0 then
+    table.insert(parts, "WARN passcode leer")
+  end
+  if password and password:match("^COOKIE:") then
+    table.insert(parts, "modus=COOKIE-Import")
+  end
+  return table.concat(parts, ", ")
+end
+
+function boaDebugSummarizeFormBody(body)
+  if type(body) ~= "string" or body == "" then
+    return "formBody: leer"
+  end
+
+  local fieldLengths = {}
+  for part in body:gmatch("[^&]+") do
+    local key, value = part:match("^([^=]+)=(.*)$")
+    if key then
+      local decoded = value
+      if MM and type(MM.urldecode) == "function" then
+        local ok, decodedValue = pcall(MM.urldecode, value)
+        if ok and type(decodedValue) == "string" then
+          decoded = decodedValue
+        end
+      end
+      if key == "passcode" or key == "new-passcode" then
+        fieldLengths[key] = "len=" .. tostring(#decoded) .. " (redacted)"
+      elseif key == "onlineId" then
+        fieldLengths[key] = "len=" .. tostring(#decoded)
+      else
+        fieldLengths[key] = "len=" .. tostring(#decoded)
+      end
+    end
+  end
+
+  local orderedKeys = {
+    "csrfTokenHidden", "onlineId", "passcode", "_ib", "webAuthAPI", "_u2support",
+  }
+  local parts = { "formBody.totalLen=" .. tostring(#body) }
+  for _, key in ipairs(orderedKeys) do
+    if fieldLengths[key] then
+      table.insert(parts, key .. "=" .. fieldLengths[key])
+    end
+  end
+  for key, summary in pairs(fieldLengths) do
+    local known = false
+    for _, orderedKey in ipairs(orderedKeys) do
+      if orderedKey == key then
+        known = true
+        break
+      end
+    end
+    if not known then
+      table.insert(parts, key .. "=" .. summary)
+    end
+  end
+
+  return table.concat(parts, ", ")
+end
+
+function extractSignOnErrorSnippet(html)
+  if type(html) ~= "string" or html == "" then
+    return nil
+  end
+  if html:match("doesn't match our records") or html:match("doesn?t match our records") then
+    return "The information you entered doesn't match our records."
+  end
+  if html:match("InvalidCredentialsExceptionV2") then
+    return "InvalidCredentialsExceptionV2"
+  end
+  local title = html:match('class="title TLu_ERROR">([^<]+)')
+  if title and title ~= "" then
+    return title:gsub("%s+", " "):match("^%s*(.-)%s*$")
+  end
+  local vipaaError = html:match('class="TLu_ERROR"[^>]*>%s*<li>([^<]+)')
+  if vipaaError and vipaaError ~= "" then
+    return vipaaError:gsub("%s+", " "):match("^%s*(.-)%s*$")
+  end
+  return nil
+end
+
+function boaDebugSummarizeResponse(method, url, response, respHeaders)
+  local parts = {
+    method .. " " .. boaDebugShortUrl(url),
+    "response.len=" .. tostring(boaDebugLen(response)),
+  }
+
+  local location = extractResponseHeader(respHeaders, "Location")
+  if location and location ~= "" then
+    table.insert(parts, "Location=" .. boaDebugShortUrl(location))
+  else
+    table.insert(parts, "Location=(nicht in Headers, evtl. Redirect bereits gefolgt)")
+  end
+
+  local cookieLen = boaDebugLen(session.cookies)
+  table.insert(parts, "cookies.len=" .. tostring(cookieLen))
+  if session.cookies and session.cookies:match("SMSESSION=") then
+    table.insert(parts, "SMSESSION=ja")
+  else
+    table.insert(parts, "SMSESSION=nein")
+  end
+
+  local errorSnippet = extractSignOnErrorSnippet(response)
+  if errorSnippet then
+    table.insert(parts, "error=" .. errorSnippet)
+  end
+
+  if isSignOnCredentialErrorPage(response) then
+    table.insert(parts, "detected=credential-error-page")
+  elseif isSignOnSuccessRedirect(location) then
+    table.insert(parts, "detected=signOnSuccessRedirect")
+  elseif isDirectAccountRedirect(location) then
+    table.insert(parts, "detected=direct-account-redirect")
+  end
+
+  return table.concat(parts, " | ")
+end
+
+function boaDebugLogRequest(method, url, body)
+  boaDebugLog(method .. " " .. boaDebugShortUrl(url))
+  if body and body ~= "" then
+    boaDebugLog(boaDebugSummarizeFormBody(body))
+  end
+end
+
+function boaDebugLogResponse(method, url, response, respHeaders, context)
+  local summary = boaDebugSummarizeResponse(method, url, response, respHeaders)
+  if context and context ~= "" then
+    summary = summary .. " | context=" .. context
+  end
+  boaDebugLog(summary)
+end
 
 local function trimCookiePart(value)
   return value:gsub("^%s+", ""):gsub("%s+$", "")
@@ -93,6 +283,19 @@ local function performPost(url, postData, contentType, requestHeaders, refererUr
   refreshSessionCookies()
   syncCookieHeader(requestHeaders)
   return response, mimeType
+end
+
+local function performRequest(method, url, body, contentType, requestHeaders, refererUrl)
+  if refererUrl then
+    requestHeaders["Referer"] = refererUrl
+  end
+  syncCookieHeader(requestHeaders)
+  local response, _, mimeType, _, respHeaders = connection:request(
+    method, url, body, contentType, requestHeaders
+  )
+  refreshSessionCookies()
+  syncCookieHeader(requestHeaders)
+  return response, mimeType, respHeaders
 end
 
 local function buildRequestHeaders(refererUrl)
@@ -429,30 +632,1207 @@ end
 
 local function ensureConnection()
   if not connection then
-    connection = Connection()
+    local storage = rawget(_G, "LocalStorage")
+    if storage and storage.connection then
+      connection = storage.connection
+    else
+      connection = Connection()
+      if storage then
+        storage.connection = connection
+      end
+    end
     connection.language = "en-US"
   end
+end
+
+function encodeJson(obj)
+  if JSON then
+    local ok, result = pcall(function() return JSON():set(obj):json() end)
+    if ok and type(result) == "string" then
+      return result
+    end
+  end
+  if type(obj) ~= "table" then
+    if type(obj) == "string" then
+      return string.format("%q", obj)
+    end
+    if type(obj) == "boolean" then
+      return obj and "true" or "false"
+    end
+    if obj == nil then
+      return "null"
+    end
+    return tostring(obj)
+  end
+
+  local parts = {}
+  if #obj > 0 then
+    for _, value in ipairs(obj) do
+      table.insert(parts, encodeJson(value))
+    end
+    return "[" .. table.concat(parts, ",") .. "]"
+  end
+
+  for key, value in pairs(obj) do
+    local encodedValue
+    if type(value) == "table" then
+      encodedValue = encodeJson(value)
+    elseif type(value) == "string" then
+      encodedValue = string.format("%q", value)
+    elseif type(value) == "boolean" then
+      encodedValue = value and "true" or "false"
+    elseif type(value) == "number" then
+      encodedValue = tostring(value)
+    else
+      encodedValue = "null"
+    end
+    table.insert(parts, string.format("%q", key) .. ":" .. encodedValue)
+  end
+  return "{" .. table.concat(parts, ",") .. "}"
+end
+
+function parseJson(jsonStr)
+  if type(jsonStr) ~= "string" or jsonStr == "" then
+    return nil
+  end
+  jsonStr = jsonStr:match("^%s*(.-)%s*$")
+  if not jsonStr:match("^[%[{]") then
+    return nil
+  end
+  if JSON then
+    local ok, result = pcall(function() return JSON(jsonStr):dictionary() end)
+    if ok and type(result) == "table" then
+      return result
+    end
+    ok, result = pcall(function() return JSON(jsonStr):array() end)
+    if ok and type(result) == "table" then
+      return result
+    end
+  end
+  return nil
+end
+
+function base64Encode(data)
+  if type(data) ~= "string" then
+    return nil
+  end
+  if type(MM.base64Encode) == "function" then
+    return MM.base64Encode(data)
+  end
+  if type(MM.base64encode) == "function" then
+    return MM.base64encode(data)
+  end
+  return nil
+end
+
+function canUseRsaLogin()
+  return type(MM.rsaEncrypt) == "function"
+end
+
+function buildLoginFilterRules()
+  return {
+    { value = "CONSUMER", name = "PLATFORM" },
+    { value = "BOA", name = "BRAND" },
+    { value = "WEB", name = "CHANNEL" },
+    { value = "SignInIdPwd", name = "FLOW" },
+  }
+end
+
+function buildClientSignalsRa()
+  local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+  local payload = {
+    client_signals = {
+      session = {
+        brand = "GWIM",
+        timestamp = timestamp,
+        activity = "login",
+        url = CONSTANTS.loginReferer,
+        user_agent = CONSTANTS.userAgent,
+        ip = nil,
+      },
+      device = {
+        browser = "Safari",
+        browser_version = "26.5",
+        os = "macOS",
+        platform = "MacIntel",
+        language = "en-US",
+      },
+      behavior = {
+        keystroke_event_count = 0,
+      },
+    },
+  }
+  local jsonPayload = encodeJson(payload)
+  local encoded = base64Encode(jsonPayload)
+  if not encoded then
+    return nil
+  end
+  return encoded
+end
+
+function decodeSpkiPublicKey(spkiB64)
+  if type(spkiB64) ~= "string" or spkiB64 == "" then
+    return nil
+  end
+  if type(MM.rsaPkcs8decode) ~= "function" then
+    return nil
+  end
+
+  local pem = "-----BEGIN PUBLIC KEY-----\n" .. spkiB64 .. "\n-----END PUBLIC KEY-----"
+  local ok, keyTable = pcall(MM.rsaPkcs8decode, pem)
+  if ok and type(keyTable) == "table" then
+    return keyTable
+  end
+
+  ok, keyTable = pcall(MM.rsaPkcs8decode, spkiB64)
+  if ok and type(keyTable) == "table" then
+    return keyTable
+  end
+
+  return nil
+end
+
+function buildCipherEnvelope(sessionKey, encryptedBinary)
+  if type(sessionKey) ~= "table" or type(encryptedBinary) ~= "string" or encryptedBinary == "" then
+    return nil
+  end
+  local encryptedData = base64Encode(encryptedBinary)
+  if not encryptedData then
+    return nil
+  end
+
+  local envelope = {
+    keyId = sessionKey.keyId,
+    publicKey = sessionKey.publicKey,
+    algo = sessionKey.algo,
+    encryptedData = encryptedData,
+  }
+  local envelopeJson = encodeJson(envelope)
+  return base64Encode(envelopeJson)
+end
+
+function encryptCredential(sessionKey, plaintext)
+  if type(plaintext) ~= "string" or plaintext == "" then
+    return nil, "Leerer Anmeldedaten-Wert"
+  end
+  if not canUseRsaLogin() then
+    return nil, "MM.rsaEncrypt nicht verfügbar"
+  end
+
+  local keyTable = decodeSpkiPublicKey(sessionKey.publicKey)
+  if not keyTable then
+    return nil, "Public Key konnte nicht dekodiert werden"
+  end
+
+  local paddingSpecs = { "pkcs1-oaep sha256", "pkcs1-oaep sha256 sha1" }
+  for _, paddingSpec in ipairs(paddingSpecs) do
+    local ok, encryptedBinary = pcall(function()
+      return MM.rsaEncrypt(keyTable, plaintext, paddingSpec)
+    end)
+    if ok and type(encryptedBinary) == "string" and encryptedBinary ~= "" then
+      local cipherValue = buildCipherEnvelope(sessionKey, encryptedBinary)
+      if cipherValue then
+        return cipherValue
+      end
+    end
+  end
+
+  return nil, "RSA-Verschlüsselung fehlgeschlagen"
+end
+
+function buildTokenSet(tokenType, cipherValue)
+  return {
+    type = tokenType,
+    value = {
+      cipherData = {
+        value = cipherValue,
+      },
+    },
+  }
+end
+
+local function buildLoginApiHeaders()
+  return {
+    ["Accept"] = "application/json",
+    ["Accept-Language"] = "en-US,en;q=0.9",
+    ["Content-Type"] = "application/json",
+    ["Cache-Control"] = "max-age=0",
+    ["Origin"] = CONSTANTS.loginOrigin,
+    ["Referer"] = CONSTANTS.loginReferer,
+    ["User-Agent"] = CONSTANTS.userAgent,
+    ["APP-NAME"] = "CONSUMER",
+    ["Cookie"] = session.cookies,
+  }
+end
+
+local function performLoginApiPost(url, bodyTable)
+  ensureConnection()
+  local headers = buildLoginApiHeaders()
+  local body = encodeJson(bodyTable)
+  syncCookieHeader(headers)
+  local response = connection:request("POST", url, body, "application/json", headers)
+  refreshSessionCookies()
+  syncCookieHeader(headers)
+  return response
+end
+
+function parseLoginApiError(response)
+  if type(response) ~= "string" or response == "" then
+    return "Keine Antwort vom Login-Server."
+  end
+  local data = parseJson(response)
+  if data and type(data.errorInfo) == "table" and data.errorInfo[1] then
+    local info = data.errorInfo[1]
+    if type(info) == "table" then
+      if info.description and info.description ~= "" then
+        return info.description
+      end
+      if info.code and info.code ~= "" then
+        return info.code
+      end
+    end
+  end
+
+  local description = response:match('"description"%s*:%s*"([^"]+)"')
+  if description and description ~= "" then
+    return description
+  end
+  local code = response:match('"errorInfo"%s*:%s*%[%s*{%s*"code"%s*:%s*"([^"]+)"')
+  if code and code ~= "" then
+    return code
+  end
+
+  return nil
+end
+
+function isLoginCompletionOk(response)
+  if type(response) ~= "string" or response == "" then
+    return false
+  end
+  local data = parseJson(response)
+  if data
+    and type(data.completion) == "table"
+    and tostring(data.completion.code) == "100" then
+    return true
+  end
+  return response:match('"completion"%s*:%s*{%s*"code"%s*:%s*"100"') ~= nil
+end
+
+function fetchLoginSessionKey()
+  local body = {
+    partnerId = CONSTANTS.loginPartnerId,
+    filterRules = buildLoginFilterRules(),
+    passkeyCapabilities = { supportsPasskeys = true },
+  }
+  local response = performLoginApiPost(CONSTANTS.loginInitContainerUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "Login-Initialisierung fehlgeschlagen."
+  end
+
+  local data = parseJson(response)
+  if not data or type(data.sessionPublicKey) ~= "string" or data.sessionPublicKey == "" then
+    return nil, "Kein sessionPublicKey in initContainer-Antwort."
+  end
+
+  return {
+    keyId = data.keyId or "hsm_enc_v1_authhub-key",
+    publicKey = data.sessionPublicKey,
+    algo = data.algo or "RSA/NONE/OAEPWithSHA256AndMGF1Padding",
+  }
+end
+
+function submitOnlineId(sessionKey, username)
+  local cipherValue, encryptError = encryptCredential(sessionKey, username)
+  if not cipherValue then
+    return nil, encryptError or "Benutzername konnte nicht verschlüsselt werden."
+  end
+
+  local body = {
+    partnerId = CONSTANTS.loginPartnerId,
+    filterRules = buildLoginFilterRules(),
+    tokenSets = { buildTokenSet("ONLINE_ID", cipherValue) },
+  }
+  local response = performLoginApiPost(CONSTANTS.loginInitAuthUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "initAuthentication fehlgeschlagen."
+  end
+
+  return cipherValue
+end
+
+function buildVerifyProcessRules()
+  local rules = {
+    { value = CONSTANTS.loginPartnerId, name = "PARTNER_ID" },
+    { value = "false", name = "SAVE_ONLINE_ID" },
+  }
+  local clientSignals = buildClientSignalsRa()
+  if clientSignals then
+    table.insert(rules, { value = clientSignals, name = "_RA" })
+  end
+  return rules
+end
+
+function verifyCredentials(sessionKey, username, password, onlineIdCipher)
+  local passwordCipher, passwordError = encryptCredential(sessionKey, password)
+  if not passwordCipher then
+    return nil, passwordError or "Passwort konnte nicht verschlüsselt werden."
+  end
+
+  local body = {
+    processRules = buildVerifyProcessRules(),
+    tokenSets = {
+      buildTokenSet("ONLINE_ID", onlineIdCipher),
+      buildTokenSet("PASSWORD", passwordCipher),
+    },
+  }
+  local response = performLoginApiPost(CONSTANTS.loginVerifyUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "verifyAuthentication fehlgeschlagen."
+  end
+
+  return true
+end
+
+function buildMfaProcessRules()
+  return {
+    { name = "SourceChannel", value = "VMA" },
+    { name = "Profile", value = "A01" },
+    { name = "AuthenticationContext", value = "SGNONCHLNG" },
+  }
+end
+
+function extractSecuredContactPoint(response)
+  local data = parseJson(response)
+  if data then
+    local candidates = {
+      data.securedContactPoint,
+      data.securedContactPoints and data.securedContactPoints[1],
+      data.contactPoints and data.contactPoints[1],
+      data.authenticationMethods and data.authenticationMethods[1],
+    }
+    for _, candidate in ipairs(candidates) do
+      if type(candidate) == "table" then
+        return candidate
+      end
+    end
+  end
+
+  local deliveryMethod = response:match('"deliveryMethod"%s*:%s*"([^"]+)"')
+  local maskedValue = response:match('"maskedContactPoint"%s*:%s*{%s*"value"%s*:%s*"([^"]+)"')
+  if deliveryMethod or maskedValue then
+    return {
+      deliveryMethod = deliveryMethod or "TEXT",
+      maskedContactPoint = {
+        value = maskedValue or "",
+        description = "Masked Phone Number",
+      },
+    }
+  end
+
+  return nil
+end
+
+function initiateMfaStepUp()
+  local body = {
+    processRules = {
+      { name = "AuthenticationContext", value = "SGNONCHLNG" },
+      { name = "U2F_ENABLED", value = "true" },
+    },
+    filterRules = {
+      { value = "CONSUMER", name = "BRAND" },
+      { value = "WEB", name = "CHANNEL" },
+    },
+  }
+  local response = performLoginApiPost(CONSTANTS.loginStepUpUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "initiateStepUp fehlgeschlagen."
+  end
+
+  local contactPoint = extractSecuredContactPoint(response)
+  if not contactPoint then
+    return nil, "Keine MFA-Kontaktmethode in initiateStepUp-Antwort gefunden."
+  end
+
+  return contactPoint
+end
+
+function sendMfaCode(contactPoint)
+  local body = {
+    securedContactPoint = contactPoint,
+    processRules = buildMfaProcessRules(),
+  }
+  local response = performLoginApiPost(CONSTANTS.loginSendCodeUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "sendCode fehlgeschlagen."
+  end
+
+  local masked = ""
+  if type(contactPoint.maskedContactPoint) == "table" then
+    masked = contactPoint.maskedContactPoint.value or ""
+  end
+  return masked
+end
+
+function validateMfaCode(code)
+  if type(code) ~= "string" or code:match("^%s*$") then
+    return nil, "Leerer MFA-Code."
+  end
+
+  local body = {
+    authenticationCode = code:match("^%s*(.-)%s*$"),
+    processRules = buildMfaProcessRules(),
+  }
+  local response = performLoginApiPost(CONSTANTS.loginValidateCodeUrl, body)
+  local errorMessage = parseLoginApiError(response)
+  if errorMessage then
+    return nil, errorMessage
+  end
+  if not isLoginCompletionOk(response) then
+    return nil, "validateCode fehlgeschlagen."
+  end
+
+  return true
+end
+
+function extractResponseHeader(respHeaders, headerName)
+  if not respHeaders or not headerName then
+    return nil
+  end
+  local lowerName = headerName:lower()
+  if type(respHeaders) == "table" then
+    for key, value in pairs(respHeaders) do
+      if type(key) == "string" and key:lower() == lowerName and type(value) == "string" then
+        return value
+      end
+    end
+    for _, entry in ipairs(respHeaders) do
+      if type(entry) == "table" and type(entry.name) == "string" and entry.name:lower() == lowerName then
+        return entry.value
+      end
+    end
+  elseif type(respHeaders) == "string" then
+    for line in respHeaders:gmatch("[^\r\n]+") do
+      local name, value = line:match("^([^:]+):%s*(.+)$")
+      if name and name:lower() == lowerName then
+        return value
+      end
+    end
+  end
+  return nil
+end
+
+function buildFormUrlEncoded(fields)
+  local parts = {}
+  for key, value in pairs(fields) do
+    table.insert(parts, MM.urlencode(key) .. "=" .. MM.urlencode(tostring(value)))
+  end
+  return table.concat(parts, "&")
+end
+
+function zeroPadToBlockSize(data, blockSize)
+  if type(data) ~= "string" then
+    return nil
+  end
+  local remainder = #data % blockSize
+  if remainder == 0 then
+    return data
+  end
+  return data .. string.rep("\0", blockSize - remainder)
+end
+
+function canUseAcwCrypto()
+  return type(MM.aes128encrypt) == "function" and type(MM.urlencode) == "function"
+end
+
+function acwAesEncrypt(plaintext, keyString)
+  if type(plaintext) ~= "string" or type(keyString) ~= "string" or keyString == "" then
+    return nil, "Ungültige ACW-Verschlüsselungsparameter."
+  end
+  if type(MM.aes128encrypt) ~= "function" then
+    return nil, "MM.aes128encrypt nicht verfügbar."
+  end
+
+  local padded = zeroPadToBlockSize(plaintext, 16)
+  if not padded then
+    return nil, "ACW-Padding fehlgeschlagen."
+  end
+
+  local key = keyString
+  local iv = ""
+  local modes = { "aes128 ecb", "aes-128-ecb" }
+  for _, mode in ipairs(modes) do
+    local ok, cipher = pcall(MM.aes128encrypt, key, iv, padded, mode)
+    if ok and type(cipher) == "string" and #cipher > 0 then
+      local encoded = base64Encode(cipher)
+      if encoded then
+        return encoded
+      end
+    end
+  end
+
+  local ok, cipher = pcall(MM.aes128encrypt, key, iv, padded)
+  if ok and type(cipher) == "string" and #cipher > 0 then
+    local encoded = base64Encode(cipher)
+    if encoded then
+      return encoded
+    end
+  end
+
+  return nil, "ACW-Verschlüsselung fehlgeschlagen."
+end
+
+function parseJsonpPayload(response)
+  if type(response) ~= "string" or response == "" then
+    return nil
+  end
+  local jsonPart = response:match("%((.+)%);?$")
+  if not jsonPart then
+    return nil
+  end
+  return parseJson(jsonPart)
+end
+
+function extractHiddenInputValue(html, fieldName)
+  if type(html) ~= "string" or type(fieldName) ~= "string" then
+    return nil
+  end
+  local patterns = {
+    'name=["\']' .. fieldName .. '["\']%s+value=["\']([^"\']+)["\']',
+    'value=["\']([^"\']+)["\']%s+name=["\']' .. fieldName .. '["\']',
+  }
+  for _, pattern in ipairs(patterns) do
+    local value = html:match(pattern)
+    if value and value ~= "" then
+      return value
+    end
+  end
+  return nil
+end
+
+function parseCsrfFromSignOnScreen(html)
+  return extractHiddenInputValue(html, "csrfTokenHidden")
+end
+
+function parseAcwEncryptKey(html)
+  if type(html) ~= "string" then
+    return nil
+  end
+  return html:match('acwEncryptKey:%s*["\']([^"\']+)["\']')
+    or html:match('acwEncryptKey%s*=%s*["\']([^"\']+)["\']')
+end
+
+function buildSignOnIbJson()
+  return encodeJson({
+    oidkeypress = false,
+    oidpaste = true,
+    pckeypress = false,
+    pcpaste = true,
+    userAgent = CONSTANTS.userAgent,
+    pwMan = false,
+  })
+end
+
+function buildSignOnFormBody(csrfToken, username, password)
+  local fields = {
+    csrfTokenHidden = csrfToken,
+    lpOlbResetErrorCounter = "0",
+    lpPasscodeErrorCounter = "0",
+    contGsid = "",
+    mouseCapturedEvents = "",
+    onlineId = username,
+    passcode = password,
+    ["new-passcode"] = "",
+    _ib = buildSignOnIbJson(),
+    _u2support = "-1",
+    webAuthAPI = "true",
+  }
+
+  return buildFormUrlEncoded(fields)
+end
+
+function buildJsonpCallback()
+  local ts = tostring(os.time())
+  return "jQuery" .. ts .. "000_" .. ts
+end
+
+function isSignOnCredentialError(location)
+  if type(location) ~= "string" then
+    return false
+  end
+  return location:match("InvalidCredentialsExceptionV2") ~= nil
+    or location:match("msg=Invalid") ~= nil
+end
+
+function isSignOnCredentialErrorPage(response)
+  if type(response) ~= "string" or response == "" then
+    return false
+  end
+  return response:match("InvalidCredentialsExceptionV2") ~= nil
+    or response:match("doesn't match our records") ~= nil
+    or response:match("doesn?t match our records") ~= nil
+    or response:match("The information you entered") ~= nil
+    or response:match("Invalid User ID or Password") ~= nil
+end
+
+function isSignOnSuccessRedirect(location)
+  if type(location) ~= "string" then
+    return false
+  end
+  return location:match("signOnSuccessRedirect%.go") ~= nil
+end
+
+function isDirectAccountRedirect(location)
+  if type(location) ~= "string" then
+    return false
+  end
+  return location:match("myaccounts/signin/signIn%.go") ~= nil
+    or location:match("myaccounts/details") ~= nil
+end
+
+function extractMaskedPhoneFromAuthCodeHtml(html)
+  if type(html) ~= "string" then
+    return nil
+  end
+  return html:match("XXX%-XXX%-(%d+)")
+    or html:match("XXX%-XXX%-(%d%d%d%d)")
+    or html:match("<b>%s*XXX%-XXX%-([^<]+)</b>")
+end
+
+function fetchSignOnCsrfToken()
+  boaDebugLog("Login Schritt 1/2: CSRF von signOnV2Screen laden")
+  local headers = buildRequestHeaders(nil)
+  boaDebugLogRequest("GET", CONSTANTS.signOnScreenUrl, nil)
+  local response, _, respHeaders = performRequest(
+    "GET", CONSTANTS.signOnScreenUrl, nil, nil, headers, nil
+  )
+  boaDebugLogResponse("GET", CONSTANTS.signOnScreenUrl, response, respHeaders, "csrf-fetch")
+  if not response or response == "" then
+    boaDebugLog("CSRF-Fetch fehlgeschlagen: leere Antwort")
+    return nil, "Login-Seite ohne Antwort."
+  end
+  local csrf = parseCsrfFromSignOnScreen(response)
+  if not csrf then
+    boaDebugLog("CSRF-Fetch fehlgeschlagen: Token nicht im HTML")
+    return nil, "CSRF-Token auf der Login-Seite nicht gefunden."
+  end
+  boaDebugLog("CSRF ok, len=" .. tostring(#csrf))
+  return csrf
+end
+
+function postSignOnCredentials(username, password, csrfToken)
+  boaDebugLog("Login Schritt 2/2: signOnV2 POST")
+  boaDebugLog(boaDebugSummarizeCredentials(username, password))
+  local headers = buildRequestHeaders(CONSTANTS.signOnScreenUrl)
+  headers["Content-Type"] = "application/x-www-form-urlencoded"
+  headers["Origin"] = CONSTANTS.loginOrigin
+  local body = buildSignOnFormBody(csrfToken, username, password)
+  boaDebugLogRequest("POST", CONSTANTS.signOnPostUrl, body)
+  local response, _, respHeaders = performRequest(
+    "POST", CONSTANTS.signOnPostUrl, body, "application/x-www-form-urlencoded", headers, CONSTANTS.signOnScreenUrl
+  )
+  boaDebugLogResponse("POST", CONSTANTS.signOnPostUrl, response, respHeaders, "signOn-post")
+  local location = extractResponseHeader(respHeaders, "Location")
+  if isSignOnCredentialError(location) or isSignOnCredentialErrorPage(response) then
+    local reason = "credential-error"
+    if isSignOnCredentialError(location) then
+      reason = reason .. "+location"
+    end
+    if isSignOnCredentialErrorPage(response) then
+      reason = reason .. "+html"
+    end
+    boaDebugLog("Login abgelehnt: " .. reason)
+    return nil, "Benutzername oder Passwort ungültig."
+  end
+  if isDirectAccountRedirect(location) then
+    boaDebugLog("Login erfolgreich ohne MFA (direct account redirect)")
+    if location then
+      performGet(location, buildRequestHeaders(CONSTANTS.signOnScreenUrl), CONSTANTS.signOnScreenUrl)
+    end
+    return { directLogin = true }
+  end
+  if not isSignOnSuccessRedirect(location) then
+    if isSignOnCredentialErrorPage(response) then
+      boaDebugLog("Login abgelehnt: credential-error-page ohne Location-Header")
+      return nil, "Benutzername oder Passwort ungültig."
+    end
+    boaDebugLog("Login fehlgeschlagen: unerwartete Antwort/Weiterleitung")
+    return nil, "Login fehlgeschlagen (unerwartete Weiterleitung)."
+  end
+
+  boaDebugLog("Login Passwort ok, MFA folgt (signOnSuccessRedirect)")
+  performGet(CONSTANTS.signOnSuccessUrl, buildRequestHeaders(CONSTANTS.signOnScreenUrl), CONSTANTS.signOnScreenUrl)
+  return { directLogin = false }
+end
+
+function initializeAuthCodeWidget()
+  boaDebugLog("MFA Schritt 1/4: authCodeInitialize")
+  local referer = CONSTANTS.signOnSuccessUrl
+  local headers = buildRequestHeaders(referer)
+  boaDebugLogRequest("GET", CONSTANTS.authCodeInitUrl, nil)
+  local initResponse = performGet(CONSTANTS.authCodeInitUrl, headers, referer)
+  boaDebugLog("authCodeInitialize response.len=" .. tostring(boaDebugLen(initResponse)))
+  if not initResponse or initResponse == "" then
+    return nil, "Auth-Code-Widget konnte nicht initialisiert werden."
+  end
+
+  local encryptKey = parseAcwEncryptKey(initResponse)
+  if not encryptKey then
+    boaDebugLog("acwEncryptKey nicht in authCodeInitialize gefunden")
+    return nil, "acwEncryptKey nicht gefunden."
+  end
+  boaDebugLog("acwEncryptKey ok, len=" .. tostring(#encryptKey))
+
+  local callback = buildJsonpCallback()
+  local displayUrl = CONSTANTS.authCodeDisplayUrl
+    .. "?request_locale=en-us&callback=" .. MM.urlencode(callback)
+    .. "&_=" .. tostring(os.time())
+  local ajaxHeaders = buildAjaxPostHeaders(referer)
+  ajaxHeaders["Accept"] = "application/javascript, */*;q=0.1"
+  boaDebugLogRequest("GET", displayUrl, nil)
+  local displayResponse = performGet(displayUrl, ajaxHeaders, referer)
+  boaDebugLog("authcodeDisplay response.len=" .. tostring(boaDebugLen(displayResponse)))
+  if not displayResponse or displayResponse == "" then
+    return nil, "Auth-Code-Anzeige fehlgeschlagen."
+  end
+
+  return {
+    encryptKey = encryptKey,
+    callback = callback,
+  }
+end
+
+function sendAuthCodeRequest(authState)
+  if not authState or not authState.encryptKey then
+    return nil, "Auth-Code-Status unvollständig."
+  end
+
+  boaDebugLog("MFA Schritt 2/4: sendAuthCode (SMS anfordern)")
+  local requestPlaintext = "selectedContact|0|contactType|text"
+  local requestToken, encryptError = acwAesEncrypt(requestPlaintext, authState.encryptKey)
+  if not requestToken then
+    boaDebugLog("sendAuthCode Verschlüsselung fehlgeschlagen: " .. tostring(encryptError))
+    return nil, encryptError or "Auth-Code-Anforderung konnte nicht verschlüsselt werden."
+  end
+  boaDebugLog("acw_request_token erzeugt, len=" .. tostring(#requestToken))
+
+  local callback = authState.callback or buildJsonpCallback()
+  local url = CONSTANTS.sendAuthCodeUrl
+    .. "?callback=" .. MM.urlencode(callback)
+    .. "&acw_request_token=" .. MM.urlencode(requestToken)
+    .. "&action=processACWRequest"
+    .. "&_=" .. tostring(os.time())
+  local referer = CONSTANTS.signOnSuccessUrl
+  local ajaxHeaders = buildAjaxPostHeaders(referer)
+  ajaxHeaders["Accept"] = "application/javascript, */*;q=0.1"
+  boaDebugLogRequest("GET", url, nil)
+  local response = performGet(url, ajaxHeaders, referer)
+  boaDebugLog("sendAuthCode response.len=" .. tostring(boaDebugLen(response)))
+  if not response or response == "" then
+    return nil, "SMS-Code konnte nicht angefordert werden."
+  end
+
+  local payload = parseJsonpPayload(response)
+  local htmlSource = payload and payload.htmlSource or response
+  local masked = extractMaskedPhoneFromAuthCodeHtml(htmlSource)
+  if masked and masked ~= "" then
+    boaDebugLog("SMS gesendet an XXX-XXX-" .. masked)
+    return "XXX-XXX-" .. masked
+  end
+  boaDebugLog("sendAuthCode ok, Telefonnummer nicht im Response erkannt")
+  return "Ihr registriertes Gerät"
+end
+
+function validateAuthCodeAndFinish(code, authState)
+  if not authState or not authState.encryptKey then
+    return nil, "Auth-Code-Status unvollständig."
+  end
+  if type(code) ~= "string" or code:match("^%s*$") then
+    return nil, "Leerer MFA-Code."
+  end
+  code = code:match("^%s*(.-)%s*$")
+
+  boaDebugLog("MFA Schritt 3/4: validateAuthCode, code.len=" .. tostring(#code))
+  local enterToken, encryptError = acwAesEncrypt(code, authState.encryptKey)
+  if not enterToken then
+    boaDebugLog("validateAuthCode Verschlüsselung fehlgeschlagen: " .. tostring(encryptError))
+    return nil, encryptError or "MFA-Code konnte nicht verschlüsselt werden."
+  end
+  boaDebugLog("acw_enter_token erzeugt, len=" .. tostring(#enterToken))
+
+  local callback = authState.callback or buildJsonpCallback()
+  local url = CONSTANTS.validateAuthCodeUrl
+    .. "?callback=" .. MM.urlencode(callback)
+    .. "&acw_enter_token=" .. MM.urlencode(enterToken)
+    .. "&action=processACWEnter"
+    .. "&_=" .. tostring(os.time())
+  local referer = CONSTANTS.signOnSuccessUrl
+  local ajaxHeaders = buildAjaxPostHeaders(referer)
+  ajaxHeaders["Accept"] = "application/javascript, */*;q=0.1"
+  boaDebugLogRequest("GET", url, nil)
+  local response = performGet(url, ajaxHeaders, referer)
+  boaDebugLog("validateAuthCode response.len=" .. tostring(boaDebugLen(response)))
+  if not response or response == "" then
+    return nil, "MFA-Validierung ohne Antwort."
+  end
+
+  local payload = parseJsonpPayload(response)
+  local htmlSource = payload and payload.htmlSource or response
+  local csrfToken = extractHiddenInputValue(htmlSource, "csrfTokenHidden")
+  local validationToken = extractHiddenInputValue(htmlSource, "validationToken")
+  if not csrfToken or not validationToken then
+    if response:match("error") or response:match("Error") then
+      boaDebugLog("validateAuthCode: Server meldet Fehler im JSONP-Response")
+      return nil, "Ungültiger Authentifizierungscode."
+    end
+    boaDebugLog("validateAuthCode: csrf/validationToken fehlen im Response")
+    return nil, "Validierungstoken nach MFA nicht gefunden."
+  end
+  boaDebugLog("validateAuthCode ok, validationToken.len=" .. tostring(#validationToken))
+
+  boaDebugLog("MFA Schritt 4/4: validateChallengeAnswerV2 POST")
+  local headers = buildRequestHeaders(referer)
+  headers["Content-Type"] = "application/x-www-form-urlencoded"
+  headers["Origin"] = CONSTANTS.loginOrigin
+  local body = buildFormUrlEncoded({
+    csrfTokenHidden = csrfToken,
+    validationToken = validationToken,
+  })
+  boaDebugLogRequest("POST", CONSTANTS.validateChallengeUrl, body)
+  local challengeResponse, _, respHeaders = performRequest(
+    "POST", CONSTANTS.validateChallengeUrl, body, "application/x-www-form-urlencoded", headers, referer
+  )
+  boaDebugLogResponse("POST", CONSTANTS.validateChallengeUrl, challengeResponse, respHeaders, "mfa-finish")
+  local location = extractResponseHeader(respHeaders, "Location")
+  if location then
+    performGet(location, buildRequestHeaders(referer), referer)
+  else
+    performGet(CONSTANTS.loginSignInGoUrl, buildRequestHeaders(referer), referer)
+  end
+
+  if not verifyActiveSession() then
+    boaDebugLog("Session nach MFA nicht verifiziert")
+    return nil, "Login abgeschlossen, aber Session nicht verifiziert."
+  end
+  boaDebugLog("Login + MFA erfolgreich, Session verifiziert")
+  return true
+end
+
+function performSignOnV2Login(username, password)
+  boaDebugLog("=== signOnV2 Login start ===")
+  boaDebugLog("APIs: urlencode=" .. tostring(type(MM.urlencode) == "function")
+    .. ", aes128encrypt=" .. tostring(type(MM.aes128encrypt) == "function")
+    .. ", base64Encode=" .. tostring(type(MM.base64Encode) == "function" or type(MM.base64encode) == "function"))
+  if type(MM.urlencode) ~= "function" then
+    return "MM.urlencode nicht verfügbar."
+  end
+
+  local csrfToken, csrfError = fetchSignOnCsrfToken()
+  if not csrfToken then
+    boaDebugLog("Abbruch: " .. tostring(csrfError))
+    return csrfError or "CSRF-Token konnte nicht geladen werden."
+  end
+
+  local signOnResult, signOnError = postSignOnCredentials(username, password, csrfToken)
+  if not signOnResult then
+    boaDebugLog("Abbruch: " .. tostring(signOnError))
+    return signOnError or "Anmeldung fehlgeschlagen."
+  end
+
+  if signOnResult.directLogin then
+    if verifyActiveSession() then
+      boaDebugLog("=== Login ohne MFA abgeschlossen ===")
+      return nil
+    end
+    boaDebugLog("Direct login ohne verifizierte Session")
+    return "Login ohne MFA, aber Session nicht verifiziert."
+  end
+
+  if not canUseAcwCrypto() then
+    boaDebugLog("MFA blockiert: MM.aes128encrypt fehlt")
+    return "Bank of America MFA benötigt MM.aes128encrypt.\n\nCookie-Import: COOKIE:SMSESSION=...;SSOTOKEN=..."
+  end
+
+  local authState, authError = initializeAuthCodeWidget()
+  if not authState then
+    boaDebugLog("Abbruch MFA-Init: " .. tostring(authError))
+    return authError or "MFA-Widget konnte nicht geladen werden."
+  end
+
+  session.loginFlow = "signOnV2"
+  session.authCodeState = authState
+
+  local maskedContact, sendError = sendAuthCodeRequest(authState)
+  if not maskedContact and sendError then
+    boaDebugLog("Abbruch sendAuthCode: " .. tostring(sendError))
+    return sendError
+  end
+
+  session.awaitingMfaCode = true
+  session.mfaMaskedContact = maskedContact or "Ihr registriertes Gerät"
+  boaDebugLog("=== MFA-Code angefordert, warte auf Eingabe ===")
+  return {
+    id = 2,
+    title = "Bank of America",
+    challenge = "Bitte den Authentifizierungscode eingeben"
+      .. (session.mfaMaskedContact ~= "" and (" (" .. session.mfaMaskedContact .. ").") or "."),
+    label = "Authentication Code",
+  }
+end
+
+function submitSignOnV2Mfa(code)
+  boaDebugLog("=== MFA-Schritt (Benutzereingabe) ===")
+  boaDebugLog("mfaCode.len=" .. tostring(boaDebugLen(code)))
+  local validated, validateError = validateAuthCodeAndFinish(code, session.authCodeState)
+  if not validated then
+    boaDebugLog("MFA fehlgeschlagen: " .. tostring(validateError))
+    return {
+      id = 2,
+      title = "Bank of America",
+      challenge = validateError or "Ungültiger Code. Bitte erneut eingeben.",
+      label = "Authentication Code",
+    }
+  end
+
+  session.awaitingMfaCode = false
+  session.authCodeState = nil
+  session.loginFlow = nil
+  session.mfaMaskedContact = nil
+  boaDebugLog("=== Login komplett ===")
+  return nil
+end
+
+function completeLoginNavigation()
+  local headers = buildRequestHeaders(CONSTANTS.loginReferer)
+  local response = performGet(CONSTANTS.loginSignInGoUrl, headers, CONSTANTS.loginReferer)
+  refreshSessionCookies()
+  if not response then
+    return nil, "signIn.go ohne Antwort."
+  end
+  return true
+end
+
+function isAuthenticatedAccountPage(response)
+  if not response then
+    return false
+  end
+
+  local hasAccountData = response:match("Ending in")
+    or response:match("ending in")
+    or response:match("account%-details")
+    or response:match("Account Overview")
+    or response:match("balance")
+
+  local isLoginPage = response:match("Sign In")
+    or response:match("Sign in")
+    or response:match("Log In")
+    or response:match("Log in")
+    or response:match("Enter your user ID")
+    or response:match("Bank of America %- Banking, Credit Cards")
+    or response:match("choose the card that works for you")
+
+  return hasAccountData and not isLoginPage
+end
+
+function verifyActiveSession()
+  if not session.cookies or session.cookies == "" then
+    session.cookies = connection and connection:getCookies() or session.cookies
+  end
+  if not session.cookies or session.cookies == "" then
+    return false
+  end
+
+  local testHeaders = buildRequestHeaders(nil)
+  local testResponse = performGet(
+    CONSTANTS.baseUrl .. "/myaccounts/details/card/account-details.go",
+    testHeaders,
+    CONSTANTS.baseUrl .. "/"
+  )
+
+  if isAuthenticatedAccountPage(testResponse) then
+    rememberStatementPageUrl(testResponse, session.adxToken)
+    updateAdxFromResponse(testResponse, session.adxToken)
+    return true
+  end
+
+  return false
+end
+
+function restoreLoginConnection(accountKey)
+  local storage = rawget(_G, "LocalStorage")
+  local canReuse = storage and storage.connection and storage.connectionAccountKey == accountKey
+  if canReuse then
+    connection = storage.connection
+    session.persistedConnection = true
+  else
+    connection = Connection()
+    if storage then
+      storage.connection = connection
+      storage.connectionAccountKey = accountKey
+      session.persistedConnection = true
+    else
+      session.persistedConnection = false
+    end
+  end
+  connection.language = "en-US"
+  connection.useragent = CONSTANTS.userAgent
+  session.cookies = connection:getCookies() or session.cookies
+end
+
+function directLoginUnavailableMessage()
+  return "Direct-Login (User ID + Passwort) ist in Lua ohne Browser-Runtime nicht möglich.\n\n"
+    .. "BoA verlangt Anti-Fraud-Daten vom JavaScript der Loginseite "
+    .. "(BioCatch _ia, ThreatMetrix f_variable/pm_fp, Script-Hashes _sc) — "
+    .. "nicht nachbaubar per reinem HTTP.\n\n"
+    .. "Cookie-Import (empfohlen):\n"
+    .. "1. Im Browser bei secure.bankofamerica.com einloggen (inkl. MFA)\n"
+    .. "2. Cookies exportieren (HAR oder DevTools)\n"
+    .. "3. MoneyMoney Passwort: COOKIE:SMSESSION=...;SSOTOKEN=...\n\n"
+    .. "HAR: python3 scripts/extract-boa-cookies.py login.har\n\n"
+    .. "Für Direct-Login fehlt die Engine-API WebbankingBrowser.\n"
+    .. "Details: docs/ENGINE-API-GAPS.md#bank-of-america"
+end
+
+function performPasswordLogin(username, password)
+  boaDebugLog("Direct-Login blockiert: Browser-Fingerprint erforderlich")
+  return directLoginUnavailableMessage()
+end
+
+function performSpartaPasswordLogin(username, password)
+  if not canUseRsaLogin() then
+    return "Bank of America benötigt MM.rsaEncrypt für den Sparta-Login.\n\nCookie-Import: COOKIE:SMSESSION=...;SSOTOKEN=..."
+  end
+
+  local sessionKey, keyError = fetchLoginSessionKey()
+  if not sessionKey then
+    return keyError or "Public Key konnte nicht geladen werden."
+  end
+
+  local onlineIdCipher, onlineError = submitOnlineId(sessionKey, username)
+  if not onlineIdCipher then
+    return onlineError or "Benutzername-Schritt fehlgeschlagen."
+  end
+
+  session.loginSessionKey = sessionKey
+  session.onlineIdCipher = onlineIdCipher
+
+  local verified, verifyError = verifyCredentials(sessionKey, username, password, onlineIdCipher)
+  if not verified then
+    return verifyError or "Passwort-Verifikation fehlgeschlagen."
+  end
+
+  local contactPoint, stepUpError = initiateMfaStepUp()
+  if not contactPoint then
+    return stepUpError or "MFA-Initialisierung fehlgeschlagen."
+  end
+
+  session.mfaContactPoint = contactPoint
+  local maskedContact, sendError = sendMfaCode(contactPoint)
+  if not maskedContact and sendError then
+    return sendError
+  end
+
+  session.awaitingMfaCode = true
+  session.mfaMaskedContact = maskedContact or "Ihr registriertes Gerät"
+  return {
+    id = 2,
+    title = "Bank of America",
+    challenge = "Bitte den Authentifizierungscode eingeben"
+      .. (session.mfaMaskedContact ~= "" and (" (" .. session.mfaMaskedContact .. ").") or "."),
+    label = "Authentication Code",
+  }
+end
+
+function submitMfaLoginStep(code)
+  if session.loginFlow == "signOnV2" then
+    return submitSignOnV2Mfa(code)
+  end
+
+  local validated, validateError = validateMfaCode(code)
+  if not validated then
+    return {
+      id = 2,
+      title = "Bank of America",
+      challenge = validateError or "Ungültiger Code. Bitte erneut eingeben.",
+      label = "Authentication Code",
+    }
+  end
+
+  local completed, navError = completeLoginNavigation()
+  if not completed then
+    return navError or "Login-Abschluss fehlgeschlagen."
+  end
+
+  if not verifyActiveSession() then
+    return "Login abgeschlossen, aber Session nicht verifiziert. Bitte erneut versuchen."
+  end
+
+  session.awaitingMfaCode = false
+  session.mfaContactPoint = nil
+  session.onlineIdCipher = nil
+  session.loginSessionKey = nil
+  return nil
 end
 
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Bank of America"
 end
 
-function InitializeSession(protocol, bankCode, username, username2, password, username3)
-  connection = Connection()
-  connection.language = "en-US"
+function InitializeSession2(protocol, bankCode, step, credentials, interactive)
+  local username = credentials and credentials[1] or ""
+  local password = credentials and credentials[2] or ""
+  local accountKey = username or ""
+
+  boaDebugLog("InitializeSession2 step=" .. tostring(step) .. ", " .. boaDebugSummarizeCredentials(username, password))
+
+  restoreLoginConnection(accountKey)
 
   if password and password:match("^COOKIE:") then
+    boaDebugLog("Modus: Cookie-Import")
     return loginWithImportedCookies(password:sub(8))
   end
 
-  -- Normal login not possible due to RSA encryption
-  return "Bank of America requires client-side RSA encryption for login.\n\n" ..
-         "WORKAROUND - Use Cookie Import Mode:\n" ..
-         "1. Login in your browser (www.bankofamerica.com)\n" ..
-         "2. Copy cookies from DevTools → Application → Cookies\n" ..
-         "3. Use: COOKIE:SMSESSION=...;SSOTOKEN=...;LSESSIONID=...\n\n" ..
-         "CRITICAL COOKIES: SMSESSION, SSOTOKEN, LSESSIONID, GSID, CSID, MMID"
+  if step == 1 then
+    if verifyActiveSession() then
+      boaDebugLog("Bestehende Session noch gültig, Login übersprungen")
+      return nil
+    end
+
+    if username == "" or password == "" then
+      boaDebugLog("Abbruch: Credentials leer")
+      return "Cookie-Import erforderlich: Passwort = COOKIE:SMSESSION=...;SSOTOKEN=...\n\n"
+        .. directLoginUnavailableMessage()
+    end
+
+    return performPasswordLogin(username, password)
+  end
+
+  if session.awaitingMfaCode then
+    boaDebugLog("InitializeSession2 MFA step")
+    return submitMfaLoginStep(credentials and credentials[1] or "")
+  end
+
+  boaDebugLog("InitializeSession2: LoginFailed (kein MFA pending)")
+  return LoginFailed
 end
 
 function loginWithImportedCookies(cookieString)

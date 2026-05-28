@@ -1,5 +1,5 @@
--- Tests für MLP Versicherungen Extension v1.10
--- Testet Hilfsfunktionen und Datenstrukturen
+-- Tests für MLP Versicherungen Extension v0.90
+-- Testet Hilfsfunktionen, Login-State-Machine und Datenstrukturen
 
 -- WebBanking/Connection/MM stubben
 function WebBanking(_) end
@@ -7,6 +7,26 @@ function WebBanking(_) end
 ProtocolWebBanking = "WebBanking"
 AccountTypePortfolio = 5
 LoginFailed = "LoginFailed"
+
+-- Minimaler JSON-Stub für parseLoginResponse-Tests
+JSON = function(jsonStr)
+  return {
+    dictionary = function()
+      local result = {}
+      for key, value in jsonStr:gmatch('"([^"]+)"%s*:%s*"([^"]*)"') do
+        result[key] = value
+      end
+      for key, value in jsonStr:gmatch('"([^"]+)"%s*:%s*(%d+)') do
+        result[key] = tonumber(value)
+      end
+      for key, value in jsonStr:gmatch('"([^"]+)"%s*:%s*(true|false)') do
+        result[key] = (value == "true")
+      end
+      return result
+    end,
+    array = function() return {} end
+  }
+end
 
 MM = {
   printStatus = function(msg) io.stderr:write("[STATUS] " .. msg .. "\n") end,
@@ -119,6 +139,53 @@ assertEq(SupportsBank("WebBanking", "Andere Bank"), false, "SupportsBank.wrong-s
 assertEq(formatCurrency(50000.00), "50.000,00 €", "formatCurrency.gross")
 assertEq(formatCurrency(50.00), "50,00 €", "formatCurrency.klein")
 assertEq(formatCurrency(0), "0,00 €", "formatCurrency.null")
+
+-- ============================================================
+-- Tests: Login-State-Machine (Post-Login-Flow Vorbereitung)
+-- ============================================================
+
+print()
+print("=== Test: Login-State-Machine ===")
+
+assertEq(isEmptyLoginSuccess(nil), true, "isEmptyLoginSuccess.nil")
+assertEq(isEmptyLoginSuccess(""), true, "isEmptyLoginSuccess.empty")
+assertEq(isEmptyLoginSuccess("   "), true, "isEmptyLoginSuccess.whitespace")
+assertEq(isEmptyLoginSuccess('{"access_token":"x"}'), false, "isEmptyLoginSuccess.json")
+
+local emptyLogin = parseLoginResponse("")
+assertEq(emptyLogin.success, true, "parseLoginResponse.empty.success")
+assertEq(emptyLogin.emptyBody, true, "parseLoginResponse.empty.body")
+
+local mfaLogin = parseLoginResponse('{"challengeToken":"abc123","mfaRequired":true}')
+assertEq(mfaLogin.requiresMfa, true, "parseLoginResponse.mfa.required")
+assertEq(mfaLogin.mfaToken, "abc123", "parseLoginResponse.mfa.token")
+
+local tokenLogin = parseLoginResponse('{"access_token":"tok","expires_in":3600}')
+assertEq(tokenLogin.success, true, "parseLoginResponse.token.success")
+
+local iframeJson = '{"iframeUrl":"https://vue.mlp.de/vu/client/index.html?source=https://kundenportal.mlp.de&token=eyJtest"}'
+local iframeUrl = extractIframeUrlFromPortalResponse(iframeJson)
+assertContains(iframeUrl, "vue.mlp.de", "extractIframeUrl.host")
+assertContains(iframeUrl, "token=eyJtest", "extractIframeUrl.token")
+
+-- ============================================================
+-- Tests: Cookie-Parsing
+-- ============================================================
+
+print()
+print("=== Test: Cookie-Parsing ===")
+
+parseCookieString("VUSESSIONID=first;BIGipServervue.mlp.de=lb1;VUSESSIONID=second")
+local cookieHeader = buildCookieHeader(true)
+assertContains(cookieHeader, "VUSESSIONID=first", "parseCookie.vu1")
+assertContains(cookieHeader, "VUSESSIONID=second", "parseCookie.vu2")
+assertContains(cookieHeader, "BIGipServervue.mlp.de=lb1", "parseCookie.bigip")
+
+parseCookieString("VUSESSIONID=jar1; VUSESSIONID=jar2; BIGipServervue.mlp.de=jarlb")
+collectSessionCookiesFromText("VUSESSIONID=jar1; VUSESSIONID=jar2; BIGipServervue.mlp.de=jarlb")
+local jarHeader = buildCookieHeader(true)
+assertContains(jarHeader, "VUSESSIONID=jar1", "collectCookies.vu1")
+assertContains(jarHeader, "VUSESSIONID=jar2", "collectCookies.vu2")
 
 -- ============================================================
 -- Test-Daten: Verschiedene Versicherungstypen
