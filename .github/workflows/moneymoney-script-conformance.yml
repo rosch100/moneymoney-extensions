@@ -39,4 +39,5 @@ jobs:
         run: |
           set -euo pipefail
           python3 tests/test_external_scripts_conformance.py
+          python3 tests/test_extensions_conformance.py
 

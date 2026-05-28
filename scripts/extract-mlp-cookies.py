@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MLP-Cookies aus HAR für MoneyMoney. Usage: python3 extract-mlp-cookies.py datei.har"""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import json
 import subprocess  # nosec
@@ -32,6 +32,42 @@ def parse_set_cookie(value):
         return {}
     name, val = first.split("=", 1)
     return {name.strip(): val.strip()}
+
+
+def diagnose_har(entries):
+    """Klassifiziert HAR-Typ und gibt Hinweise bei fehlenden Cookies."""
+    urls = [entry.get("request", {}).get("url", "") for entry in entries]
+    has_login = any("authentication/login" in url for url in urls)
+    has_vue_api = any("vue.mlp.de/vu/api" in url for url in urls)
+    has_vue_client = any("vue.mlp.de/vu/client" in url for url in urls)
+    has_kundenportal_api = any("kundenportal.mlp.de/api/" in url for url in urls)
+
+    if has_vue_api or has_vue_client:
+        return "login_with_vue", (
+            "HAR enthält vue.mlp.de, aber keine Cookie-Daten.\n"
+            "Beim HAR-Export Cookies einschließen (DevTools: 'Include cookies' / "
+            "'Cookies in HAR speichern') oder Cookies manuell aus "
+            "https://vue.mlp.de kopieren."
+        )
+
+    if has_login and not has_vue_api:
+        return "login_without_vue", (
+            "HAR enthält den Login-Flow, aber keine vue.mlp.de-Aufrufe.\n"
+            "Bitte nach dem Login die Vertragsübersicht öffnen (vue.mlp.de laden), "
+            "dann erneut als HAR exportieren."
+        )
+
+    if has_kundenportal_api and not has_login:
+        return "dashboard_only", (
+            "HAR ist nur ein Dashboard-Export (kundenportal.mlp.de ohne Login/vue.mlp.de).\n"
+            "Für VUSESSIONID: vollständigen Login inkl. Vertragsübersicht exportieren "
+            "oder Cookies direkt aus DevTools → Application → vue.mlp.de kopieren."
+        )
+
+    return "unknown", (
+        "Keine MLP-Versicherungs-Cookies gefunden.\n"
+        "Erwartet: Login-HAR mit vue.mlp.de und eingeschlossenen Cookie-Daten."
+    )
 
 
 def collect_cookies(har_path):
@@ -97,17 +133,21 @@ def format_cookies(cookies):
 
 
 def main(har_path):
+    with open(har_path, encoding="utf-8") as f:
+        entries = json.load(f)["log"]["entries"]
+
     cookies = collect_cookies(har_path)
     if not cookies:
-        print("Keine Cookies in der HAR-Datei.", file=sys.stderr)
+        _, hint = diagnose_har(entries)
+        print(hint, file=sys.stderr)
         sys.exit(1)
 
     # Prüfe auf kritische Cookies
     if "VUSESSIONID" not in cookies:
-        print("Warnung: VUSESSIONID fehlt!", file=sys.stderr)
-        print("Bitte stellen Sie sicher, dass Sie:", file=sys.stderr)
-        print("1. Am MLP Kundenportal angemeldet sind", file=sys.stderr)
-        print("2. Die Vertragsübersicht geöffnet haben (für vue.mlp.de)", file=sys.stderr)
+        print("Fehler: VUSESSIONID fehlt — für MLP Versicherungen nicht nutzbar.", file=sys.stderr)
+        _, hint = diagnose_har(entries)
+        print(hint, file=sys.stderr)
+        sys.exit(1)
 
     result = format_cookies(cookies)
     print(result)
