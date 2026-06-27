@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "MoneyMoney Helper",
+  "version": "1.1.1",
+  "description": "Vollständige Session-Cookies (inkl. HttpOnly) für MoneyMoney Web-Banking Extensions",
+  "permissions": ["cookies"],
+  "host_permissions": [
+    "https://*.fidelity.com/*",
+    "https://fidelity.com/*",
+    "https://*.bankofamerica.com/*",
+    "https://bankofamerica.com/*",
+    "https://*.mlp.de/*"
+  ],
+  "action": {
+    "default_title": "MoneyMoney Helper",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "moneymoney-helper@local.dev",
+      "strict_min_version": "109.0"
+    },
+    "safari": {
+      "strict_min_version": "16.0"
+    }
+  }
+}
