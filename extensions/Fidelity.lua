@@ -6,7 +6,7 @@
 --
 
 WebBanking{
-  version     = 0.90,
+  version     = 0.91,
   url         = "https://www.fidelity.com",
   services    = {"Fidelity"},
   description = "Fidelity Investments — Beta (Cookie-Import)"
@@ -15,10 +15,12 @@ WebBanking{
 local CONSTANTS = {
   loginApi = "https://ecaap.fidelity.com/user/factor/password/authentication",
   sessionApi = "https://ecaap.fidelity.com/user/session/login",
-  graphqlApi = "https://digital.fidelity.com/ftgw/digital/portfolio/api/graphql",
+  graphqlApi = "https://digital.fidelity.com/ftgw/digital/picoserver/api/graphql",
   activityApi = "https://digital.fidelity.com/ftgw/digital/webactivity/api/graphql",
   documentsApi = "https://digital.fidelity.com/ftgw/digital/documents/api/graphql",
   portfolioSummary = "https://digital.fidelity.com/ftgw/digital/portfolio/summary",
+  portfolioGetContextApi = "https://digital.fidelity.com/ftgw/digital/portfolio/api/GetContext",
+  assetAllocationApi = "https://digital.fidelity.com/ftgw/digital/performance-api/v1/asset-allocation",
   activityPage = "https://digital.fidelity.com/ftgw/digital/portfolio/activity",
   documentsPage = "https://digital.fidelity.com/ftgw/digital/portfolio/documents",
   logoutUrl = "https://www.fidelity.com/logout"
@@ -26,6 +28,226 @@ local CONSTANTS = {
 
 local connection
 local session = { cookies = "", persistedConnection = false }
+
+local function extractCookieValue(cookieString, cookieName)
+  if not cookieString or cookieString == "" or not cookieName or cookieName == "" then
+    return nil
+  end
+
+  -- Cookie-Format ist i.d.R. "a=b; c=d". Wir parsen robust via Split & Key-Vergleich.
+  for part in cookieString:gmatch("([^;]+)") do
+    -- trim
+    local token = part:match("^%s*(.-)%s*$")
+    if token and token ~= "" then
+      local k, v = token:match("^([^=]+)=(.*)$")
+      if k and v and k == cookieName then
+        local trimmedV = v:match("^%s*(.-)%s*$")
+        if trimmedV and trimmedV ~= "" then
+          return trimmedV
+        end
+        return nil
+      end
+    end
+  end
+
+  return nil
+end
+
+local function trimCookiePart(value)
+  if value == nil then
+    return ""
+  end
+  return tostring(value):match("^%s*(.-)%s*$")
+end
+
+-- Cookie Header-Merging:
+-- - bestehende Session-Cookies bleiben erhalten
+-- - neue Cookies überschreiben nur den jeweiligen Cookie-Wert (per Name)
+-- - Cookie-Reihenfolge bleibt möglichst stabil (erst vorhandene, dann neue)
+local function mergeCookies(existingCookies, newCookies)
+  existingCookies = existingCookies or ""
+  newCookies = newCookies or ""
+  if existingCookies == "" then
+    return newCookies
+  end
+  if newCookies == "" then
+    return existingCookies
+  end
+
+  local existingParts = {}
+  local existingIndex = {}
+  for part in existingCookies:gmatch("([^;]+)") do
+    local token = trimCookiePart(part)
+    if token ~= "" then
+      local k, v = token:match("^([^=]+)=(.*)$")
+      k = trimCookiePart(k)
+      v = trimCookiePart(v)
+      if k ~= "" then
+        existingIndex[k] = #existingParts + 1
+        existingParts[#existingParts + 1] = { name = k, value = v }
+      end
+    end
+  end
+
+  local newMap = {}
+  local newOrder = {}
+  local newIndex = {}
+  for part in newCookies:gmatch("([^;]+)") do
+    local token = trimCookiePart(part)
+    if token ~= "" then
+      local k, v = token:match("^([^=]+)=(.*)$")
+      k = trimCookiePart(k)
+      v = trimCookiePart(v)
+      if k ~= "" and v ~= "" then
+        newMap[k] = v
+        if newIndex[k] == nil then
+          newIndex[k] = true
+          newOrder[#newOrder + 1] = k
+        end
+      end
+    end
+  end
+
+  -- Update vorhandene Teile.
+  for i = 1, #existingParts do
+    local name = existingParts[i].name
+    if newMap[name] ~= nil then
+      existingParts[i].value = newMap[name]
+    end
+  end
+
+  -- Neue Cookie-Namen anhängen.
+  for i = 1, #newOrder do
+    local name = newOrder[i]
+    if existingIndex[name] == nil then
+      existingParts[#existingParts + 1] = { name = name, value = newMap[name] }
+    end
+  end
+
+  local merged = {}
+  for i = 1, #existingParts do
+    merged[i] = existingParts[i].name .. "=" .. existingParts[i].value
+  end
+
+  return table.concat(merged, "; ")
+end
+
+local function getContextQuery()
+  return {
+    operationName = "GetContext",
+    variables = {},
+    query = [[query GetContext {
+      getContext {
+        person {
+          assets {
+            acctNum
+            acctType
+            acctSubType
+            acctSubTypeDesc
+            gainLossBalanceDetail {
+              totalMarketVal
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+    }]]
+  }
+end
+
+local function isAuthenticatedViaGraphql()
+  if not session.cookies or session.cookies == "" then
+    return false
+  end
+
+  local headers = {
+    ["Accept"] = "*/*",
+    ["Content-Type"] = "application/json",
+    ["Cookie"] = session.cookies,
+    ["Origin"] = "https://digital.fidelity.com",
+    ["Referer"] = CONSTANTS.portfolioSummary,
+    ["apollographql-client-version"] = "0.0.0"
+  }
+
+  local response, _ = connection:request(
+    "POST",
+    CONSTANTS.graphqlApi .. "?ref_at=portsum",
+    JSON():set(getContextQuery()):json(),
+    "application/json",
+    headers
+  )
+
+  if not response or type(response) ~= "string" then
+    return false
+  end
+
+  local success, data = pcall(function() return JSON(response):dictionary() end)
+  if not success or not data or not data.data or not data.data.getContext then
+    return false
+  end
+
+  local person = data.data.getContext.person
+  local assets = person and person.assets
+  return type(assets) == "table" and #assets > 0
+end
+
+local function isAuthenticatedViaPortfolioGetContext()
+  if not session.cookies or session.cookies == "" then
+    return false
+  end
+
+  local headers = {
+    ["Accept"] = "*/*",
+    ["Content-Type"] = "application/json",
+    ["Cookie"] = session.cookies,
+    ["Origin"] = "https://digital.fidelity.com",
+    ["Referer"] = CONSTANTS.portfolioSummary
+  }
+
+  local response, _, mimeType = connection:request(
+    "POST",
+    CONSTANTS.portfolioGetContextApi,
+    JSON():set({}):json(),
+    "application/json",
+    headers
+  )
+
+  if not response or type(response) ~= "string" then
+    return false
+  end
+
+  if response:find("<!doctype html", 1, false) or (mimeType and mimeType:find("html")) then
+    return false
+  end
+
+  local success, data = pcall(function() return JSON(response):dictionary() end)
+  if not success or not data then
+    return false
+  end
+
+  -- Typical HAR contains totalMarketVal and/or assets-containing context.
+  if data.totalMarketVal ~= nil then
+    return true
+  end
+
+  if data.getContext and data.getContext.person and data.getContext.person.assets then
+    return type(data.getContext.person.assets) == "table"
+  end
+
+  return false
+end
+
+local function isAuthenticated()
+  if isAuthenticatedViaGraphql() then
+    return true
+  end
+
+  MM.printStatus("Cookie-Validierung via GraphQL fehlgeschlagen; versuche GetContext...")
+  return isAuthenticatedViaPortfolioGetContext()
+end
 
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and (bankCode == "Fidelity" or bankCode == "Fidelity Investments")
@@ -55,23 +277,17 @@ function InitializeSession(protocol, bankCode, username, username2, password, us
   connection.language = "en-US"
   connection.useragent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
 
-  -- If persisted cookies are still valid, skip the bot-protected login flow.
-  session.cookies = connection:getCookies() or ""
-  if session.cookies ~= "" and (session.cookies:match("ATC") or session.cookies:match("ET")) then
-    local testHeaders = {
-      ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      ["Accept-Language"] = "en-US,en;q=0.9",
-      ["Cookie"] = session.cookies
-    }
-    local testResponse = connection:request("GET", CONSTANTS.portfolioSummary, nil, nil, testHeaders)
-    if testResponse and (testResponse:match("portfolio") or testResponse:match("Portfolio Summary")) then
-      return nil
-    end
-  end
-
   -- Cookie import mode
   if password and password:match("^COOKIE:") then
     return loginWithImportedCookies(password:sub(8))
+  end
+
+  -- If persisted cookies are still valid, skip the bot-protected login flow.
+  session.cookies = mergeCookies(session.cookies, connection:getCookies() or "")
+  if session.cookies ~= "" and (session.cookies:match("ATC") or session.cookies:match("ET")) then
+    if isAuthenticated() then
+      return nil
+    end
   end
 
   if username == "" or password == "" or username == nil or password == nil then
@@ -104,7 +320,7 @@ function performFidelityPasswordLogin(username, password)
     ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     ["Accept-Language"] = "en-US,en;q=0.9"
   })
-  session.cookies = connection:getCookies() or ""
+  session.cookies = mergeCookies(session.cookies, connection:getCookies() or "")
 
   local loginBody = JSON():set({
     username = username,
@@ -125,7 +341,7 @@ function performFidelityPasswordLogin(username, password)
   }
 
   local loginResponse, _, mimeType = connection:request("POST", CONSTANTS.loginApi, loginBody, "application/json", loginHeaders)
-  session.cookies = connection:getCookies() or session.cookies
+  session.cookies = mergeCookies(session.cookies, connection:getCookies() or session.cookies)
 
   if not loginResponse then
     return "Login failed: No response from server"
@@ -172,16 +388,7 @@ function loginWithImportedCookies(cookieString)
 
   session.cookies = formattedCookies
 
-  -- Test session
-  local testHeaders = {
-    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    ["Accept-Language"] = "en-US,en;q=0.9",
-    ["Cookie"] = session.cookies
-  }
-
-  local testResponse, _ = connection:request("GET", CONSTANTS.portfolioSummary, nil, nil, testHeaders)
-
-  if testResponse and (testResponse:match("portfolio") or testResponse:match("Portfolio Summary")) then
+  if isAuthenticated() then
     MM.printStatus("Cookie import successful")
     return nil
   end
@@ -191,65 +398,48 @@ end
 
 function ListAccounts(knownAccounts)
   MM.printStatus("Fetching Fidelity accounts...")
-
-  local accountQuery = {
-    operationName = "GetContext",
-    variables = {},
-    query = [[query GetContext {
-      getContext {
-        person {
-          assets {
-            acctNum
-            acctType
-            acctSubType
-            acctSubTypeDesc
-            gainLossBalanceDetail {
-              totalMarketVal
-              __typename
-            }
-            __typename
-          }
-          __typename
-        }
-        __typename
-      }
-    }]]
-  }
-
   local headers = {
     ["Accept"] = "*/*",
     ["Content-Type"] = "application/json",
     ["Cookie"] = session.cookies,
     ["Origin"] = "https://digital.fidelity.com",
-    ["Referer"] = CONSTANTS.portfolioSummary,
-    ["apollographql-client-version"] = "0.0.0"
+    ["Referer"] = CONSTANTS.portfolioSummary
   }
 
-  local response, _ = connection:request("POST", CONSTANTS.graphqlApi .. "?ref_at=portsum",
-    JSON():set(accountQuery):json(), "application/json", headers)
-  session.cookies = connection:getCookies() or session.cookies
+  local response, _, mimeType = connection:request(
+    "POST",
+    CONSTANTS.portfolioGetContextApi,
+    JSON():set({}):json(),
+    "application/json",
+    headers
+  )
+  local newCookies = connection:getCookies() or ""
+  if newCookies ~= "" and extractCookieValue(newCookies, "portsum_.csrf") then
+    session.cookies = mergeCookies(session.cookies, newCookies)
+  end
 
-  if not response then
+  if not response or type(response) ~= "string" or (mimeType and mimeType:find("html")) then
     return "Failed to fetch accounts"
   end
 
   local accounts = {}
   local success, data = pcall(function() return JSON(response):dictionary() end)
+  local person = data and data.getContext and data.getContext.person or nil
+  local assets = person and person.assets or nil
 
-  if success and data and data.data and data.data.getContext and data.data.getContext.person then
-    local person = data.data.getContext.person
-    if person.assets then
-      for _, acc in ipairs(person.assets) do
-        local acctType = acc.acctSubTypeDesc or acc.acctType or "Account"
-        table.insert(accounts, {
-          name = "Fidelity " .. acctType,
-          accountNumber = acc.acctNum,
-          portfolio = true,
-          currency = "USD",
-          type = AccountTypePortfolio,
-          bankCode = "Fidelity"
-        })
-      end
+  if success and assets and type(assets) == "table" then
+    for _, acc in ipairs(assets) do
+      local acctTypeDesc = acc.acctSubTypeDesc or acc.acctType or "Account"
+      table.insert(accounts, {
+        name = "Fidelity " .. acctTypeDesc,
+        accountNumber = acc.acctNum,
+        accountType = acc.acctType or "Brokerage",
+        accountSubType = acc.acctSubType or "Mutual Fund",
+        portfolio = true,
+        currency = "USD",
+        type = AccountTypePortfolio,
+        bankCode = "Fidelity"
+      })
     end
   end
 
@@ -267,28 +457,46 @@ function RefreshAccount(account, since)
 
   MM.printStatus("Refreshing account: " .. account.name)
 
-  -- Get positions via GraphQL
-  local positionsQuery = {
-    operationName = "GetPositions",
-    variables = {
-      acctList = { { acctNum = account.accountNumber, acctType = "Brokerage", acctSubType = "Mutual Fund", preferenceDetail = false } },
-      customerId = ""
-    },
-    query = [[query GetPositions($acctList: [PositionAccountInput], $customerId: String) {
-      getPosition(acctList: $acctList, customerId: $customerId) {
-        position {
-          acctDetails {
-            acctDetail {
-              acctNum
-              positionDetails {
-                positionDetail {
-                  symbol
-                  cusip
-                  securityDescription
-                  quantity
-                  marketValDetail {
-                    marketVal
-                    totalGainLoss
+  local headers = {
+    ["Accept"] = "*/*",
+    ["Content-Type"] = "application/json",
+    ["Cookie"] = session.cookies,
+    ["Origin"] = "https://digital.fidelity.com",
+    ["Referer"] = CONSTANTS.portfolioSummary,
+    ["apollographql-client-version"] = "0.0.0"
+  }
+
+  local function fetchGraphqlPositions()
+    local positionsQuery = {
+      operationName = "GetPositions",
+      variables = {
+        acctList = {
+          {
+            acctNum = account.accountNumber,
+            acctType = account.accountType or "Brokerage",
+            acctSubType = account.accountSubType or "Mutual Fund",
+            preferenceDetail = false
+          }
+        },
+        customerId = ""
+      },
+      query = [[query GetPositions($acctList: [PositionAccountInput], $customerId: String) {
+        getPosition(acctList: $acctList, customerId: $customerId) {
+          position {
+            acctDetails {
+              acctDetail {
+                acctNum
+                positionDetails {
+                  positionDetail {
+                    symbol
+                    cusip
+                    securityDescription
+                    quantity
+                    marketValDetail {
+                      marketVal
+                      totalGainLoss
+                      __typename
+                    }
                     __typename
                   }
                   __typename
@@ -299,58 +507,66 @@ function RefreshAccount(account, since)
             }
             __typename
           }
+          topBottomPositions {
+            symbol
+            lastPrice
+            __typename
+          }
           __typename
         }
-        topBottomPositions {
-          symbol
-          lastPrice
-          __typename
-        }
-        __typename
-      }
-    }]]
-  }
+      }]]
+    }
 
-  local headers = {
-    ["Accept"] = "*/*",
-    ["Content-Type"] = "application/json",
-    ["Cookie"] = session.cookies,
-    ["Origin"] = "https://digital.fidelity.com",
-    ["Referer"] = CONSTANTS.portfolioSummary,
-    ["apollographql-client-version"] = "0.0.0"
-  }
+    local response, _, mimeType = connection:request(
+      "POST",
+      CONSTANTS.graphqlApi .. "?ref_at=portsum",
+      JSON():set(positionsQuery):json(),
+      "application/json",
+      headers
+    )
+    -- GraphQL kann fehlschlagen (z.B. 404) und dabei kann `connection:getCookies()`
+    -- ggf. das Cookie-Jar wieder auf einen weniger vollständigen Stand bringen
+    -- (fehlende portsum_.csrf Cookies). Für den REST-Fallback ist dann
+    -- die ursprüngliche `session.cookies` (aus Cookie-Import) entscheidend.
+    local newCookies = connection:getCookies() or ""
+    if newCookies ~= "" and extractCookieValue(newCookies, "portsum_.csrf") then
+      -- Nur aktualisieren, wenn wirklich der kritische portsum_.csrf Wert dabei ist.
+      -- Sonst kann es passieren, dass nach einem GraphQL-Fehlschlag nur Teil-Cookies
+      -- im Jar landen und der REST-Fallback dann "ports=false" sieht.
+      session.cookies = mergeCookies(session.cookies, newCookies)
+    end
+    if not response or type(response) ~= "string" then
+      return nil
+    end
 
-  local response, _ = connection:request("POST", CONSTANTS.graphqlApi .. "?ref_at=portsum",
-    JSON():set(positionsQuery):json(), "application/json", headers)
-  session.cookies = connection:getCookies() or session.cookies
+    if response:find("<!doctype html", 1, false) or (mimeType and mimeType:find("html")) then
+      return nil
+    end
 
-  if not response then
-    return { balance = 0, securities = {} }
+    local success, data = pcall(function() return JSON(response):dictionary() end)
+    if not success or not data or not data.data or not data.data.getPosition then
+      return nil
+    end
+
+    return data
   end
 
-  local success, data = pcall(function() return JSON(response):dictionary() end)
-  if not success or not data then
-    return { balance = 0, securities = {} }
-  end
+  local localData = fetchGraphqlPositions()
+  if localData then
+    local securities = {}
+    local totalBalance = 0
+    local priceLookup = {}
 
-  local securities = {}
-  local totalBalance = 0
-  local priceLookup = {}
-
-  -- Build price lookup from topBottomPositions
-  if data.data and data.data.getPosition and data.data.getPosition.topBottomPositions then
-    for _, pos in ipairs(data.data.getPosition.topBottomPositions) do
-      if pos.symbol and pos.lastPrice then
-        priceLookup[pos.symbol] = tonumber(pos.lastPrice) or 0
+    if localData.data.getPosition.topBottomPositions then
+      for _, pos in ipairs(localData.data.getPosition.topBottomPositions) do
+        if pos.symbol and pos.lastPrice then
+          priceLookup[pos.symbol] = tonumber(pos.lastPrice) or 0
+        end
       end
     end
-  end
 
-  -- Extract positions
-  if data.data and data.data.getPosition and data.data.getPosition.position then
-    local position = data.data.getPosition.position
-    if position.acctDetails and position.acctDetails.acctDetail then
-      for _, acct in ipairs(position.acctDetails.acctDetail) do
+    if localData.data.getPosition.position and localData.data.getPosition.position.acctDetails and localData.data.getPosition.position.acctDetails.acctDetail then
+      for _, acct in ipairs(localData.data.getPosition.position.acctDetails.acctDetail) do
         if acct.positionDetails and acct.positionDetails.positionDetail then
           for _, pos in ipairs(acct.positionDetails.positionDetail) do
             local symbol = pos.symbol or ""
@@ -390,6 +606,149 @@ function RefreshAccount(account, since)
           end
         end
       end
+    end
+
+    return { balance = totalBalance, securities = securities }
+  end
+
+  -- REST-Fallback: asset-allocation liefert mindestens Marktwerte (Balance).
+  local restHeadersBase = {
+    -- HAR (digital.fidelity.com/ftgw/digital/portfolio/performance) verwendet eine "json, text/plain"-Accept-Matrix
+    ["Accept"] = "application/json, text/plain, */*",
+    ["Content-Type"] = "application/json",
+    ["Cookie"] = session.cookies,
+    ["Origin"] = "https://digital.fidelity.com",
+    -- Für performance-api sind Referer/Context relevant.
+    ["Referer"] = "https://digital.fidelity.com/ftgw/digital/portfolio/performance",
+    -- In HAR ist bei vielen performance-api Calls zusätzlich ein IP-Override Header gesetzt.
+    ["x-override-ip"] = "true",
+    ["X-Requested-With"] = "XMLHttpRequest"
+  }
+
+  local body = {
+    includeAggregate = true,
+    includeHoldingsDetails = true,
+    includeGranular = true,
+    excludeEquityStyle = false,
+    excludeBondStyle = false,
+    accounts = {
+      {
+        accountNum = account.accountNumber,
+        -- Fidelitys `asset-allocation` scheint diese Felder (zumindest im HAR) für die Anfrageform
+        -- eng zu erwarten; deshalb konstant setzen und nur `accountNum` variieren.
+        accountType = "Brokerage",
+        accountSubType = "Mutual Fund"
+      }
+    }
+  }
+
+  local csrfPorts = extractCookieValue(session.cookies, "portsum_.csrf")
+  local csrfPortsum = extractCookieValue(session.cookies, "PORTSUM_XSRF-TOKEN")
+
+  local function isHtmlLogin(resp, mt)
+    if not resp or type(resp) ~= "string" then
+      return false
+    end
+    return resp:find("<!doctype html", 1, false)
+      or (mt and mt:find("html"))
+      or (resp:find("<html", 1, false) ~= nil)
+  end
+
+  local function fetchAssetAllocationWithCsrf(csrfToken)
+    local restHeaders = {}
+    for k, v in pairs(restHeadersBase) do
+      restHeaders[k] = v
+    end
+    if csrfToken then
+      -- Einige Fidelity-Endpunkte akzeptieren "x-csrf-token" statt "X-XSRF-TOKEN".
+      restHeaders["x-csrf-token"] = csrfToken
+    end
+
+    local response, _, mimeType = connection:request(
+      "POST",
+      CONSTANTS.assetAllocationApi,
+      JSON():set(body):json(),
+      "application/json",
+      restHeaders
+    )
+    local newCookies = connection:getCookies() or ""
+    if newCookies ~= "" and extractCookieValue(newCookies, "portsum_.csrf") then
+      session.cookies = mergeCookies(session.cookies, newCookies)
+    end
+
+    if not response or type(response) ~= "string" then
+      return nil, mimeType
+    end
+    return response, mimeType
+  end
+
+  -- Deterministisch: bevorzugt PORTSUM_XSRF-TOKEN, sonst portsum_.csrf.
+  local csrfTokenPreferred = csrfPortsum or csrfPorts
+  local response, mimeType = fetchAssetAllocationWithCsrf(csrfTokenPreferred)
+
+  if not response or type(response) ~= "string" then
+    return { balance = 0, securities = {} }
+  end
+
+  if isHtmlLogin(response, mimeType) then
+    return "Fidelity: performance-api Session ungültig (Login-Seite bekommen). Bitte Cookie Import mit frischen Cookies wiederholen (PORTSUM_XSRF-TOKEN / portsum_.csrf prüfen)."
+  end
+
+  local success, data = pcall(function() return JSON(response):dictionary() end)
+  if not success or not data then
+    return { balance = 0, securities = {} }
+  end
+
+  -- Fidelity liefert asset-allocation oft als { assetAllocation: { ... } }.
+  local payload = data
+  if data.assetAllocation and type(data.assetAllocation) == "table" then
+    payload = data.assetAllocation
+  end
+
+  local totalBalance = tonumber(payload.overallMarketValue) or 0
+  local holdings = payload.holdingsDetails
+  if not holdings and payload.aggregateStyleDetail and payload.aggregateStyleDetail.holdingDetails then
+    holdings = payload.aggregateStyleDetail.holdingDetails
+  end
+
+  if totalBalance == 0 and holdings and type(holdings) == "table" then
+    -- Fallback: Balance aus holdingsDetails aufsummieren.
+    for _, h in ipairs(holdings) do
+      local marketValue = tonumber(h.marketValue) or 0
+      totalBalance = totalBalance + marketValue
+    end
+  end
+
+  local securities = {}
+  if holdings and type(holdings) == "table" then
+    for _, h in ipairs(holdings) do
+      local symbol = h.symbol or ""
+      local name = h.longName or h.name or symbol
+      if not name or name == "" then
+        name = "Unknown"
+      end
+
+      local quantity = tonumber(h.quantity) or 0
+      local marketValue = tonumber(h.marketValue) or 0
+      local rawPrice = tonumber(h.price)
+      local price = rawPrice or 0
+
+      -- Wenn Preis fehlt, kann man ihn aus Marktwert/Anzahl ableiten.
+      if rawPrice == nil and quantity > 0 then
+        price = marketValue / quantity
+      end
+
+      table.insert(securities, {
+        name = name,
+        isin = h.cusip or "",
+        securityNumber = symbol,
+        quantity = quantity,
+        price = price,
+        purchasePrice = 0,
+        amount = marketValue,
+        currencyOfPrice = "USD",
+        currencyOfOriginalAmount = "USD"
+      })
     end
   end
 
