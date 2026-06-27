@@ -1,0 +1,603 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E140516B2FEFF49A008F0396 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E140516A2FEFF49A008F0396 /* AppDelegate.swift */; };
+		E140516F2FEFF49A008F0396 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = E140516D2FEFF49A008F0396 /* Main.html */; };
+		E14051712FEFF49A008F0396 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = E14051702FEFF49A008F0396 /* Icon.png */; };
+		E14051732FEFF49A008F0396 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = E14051722FEFF49A008F0396 /* Style.css */; };
+		E14051752FEFF49A008F0396 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = E14051742FEFF49A008F0396 /* Script.js */; };
+		E14051772FEFF49A008F0396 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14051762FEFF49A008F0396 /* ViewController.swift */; };
+		E140517A2FEFF49A008F0396 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E14051782FEFF49A008F0396 /* Main.storyboard */; };
+		E140517C2FEFF49B008F0396 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E140517B2FEFF49B008F0396 /* Assets.xcassets */; };
+		E14051832FEFF49B008F0396 /* MoneyMoney Helper Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E14051822FEFF49B008F0396 /* MoneyMoney Helper Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E14051882FEFF49B008F0396 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14051872FEFF49B008F0396 /* SafariWebExtensionHandler.swift */; };
+		E140519C2FEFF49B008F0396 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = E14051942FEFF49B008F0396 /* popup.js */; };
+		E140519D2FEFF49B008F0396 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = E14051952FEFF49B008F0396 /* popup.html */; };
+		E140519E2FEFF49B008F0396 /* config.js in Resources */ = {isa = PBXBuildFile; fileRef = E14051962FEFF49B008F0396 /* config.js */; };
+		E140519F2FEFF49B008F0396 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = E14051972FEFF49B008F0396 /* README.md */; };
+		E14051A02FEFF49B008F0396 /* cookie-export.js in Resources */ = {isa = PBXBuildFile; fileRef = E14051982FEFF49B008F0396 /* cookie-export.js */; };
+		E14051A12FEFF49B008F0396 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = E14051992FEFF49B008F0396 /* icons */; };
+		E14051A22FEFF49B008F0396 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = E140519A2FEFF49B008F0396 /* manifest.json */; };
+		E14051A32FEFF49B008F0396 /* cookie-export-banks.json in Resources */ = {isa = PBXBuildFile; fileRef = E140519B2FEFF49B008F0396 /* cookie-export-banks.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E14051842FEFF49B008F0396 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E140515F2FEFF49A008F0396 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E14051812FEFF49B008F0396;
+			remoteInfo = "MoneyMoney Helper Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E140518F2FEFF49B008F0396 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				E14051832FEFF49B008F0396 /* MoneyMoney Helper Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		E14051672FEFF49A008F0396 /* MoneyMoney Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "MoneyMoney Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E140516A2FEFF49A008F0396 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		E140516E2FEFF49A008F0396 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		E14051702FEFF49A008F0396 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		E14051722FEFF49A008F0396 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		E14051742FEFF49A008F0396 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		E14051762FEFF49A008F0396 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		E14051792FEFF49A008F0396 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		E140517B2FEFF49B008F0396 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E140517D2FEFF49B008F0396 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E14051822FEFF49B008F0396 /* MoneyMoney Helper Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "MoneyMoney Helper Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E14051872FEFF49B008F0396 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		E14051892FEFF49B008F0396 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E14051942FEFF49B008F0396 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
+		E14051952FEFF49B008F0396 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		E14051962FEFF49B008F0396 /* config.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = config.js; path = Resources/config.js; sourceTree = "<group>"; };
+		E14051972FEFF49B008F0396 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = Resources/README.md; sourceTree = "<group>"; };
+		E14051982FEFF49B008F0396 /* cookie-export.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "cookie-export.js"; path = "Resources/cookie-export.js"; sourceTree = "<group>"; };
+		E14051992FEFF49B008F0396 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		E140519A2FEFF49B008F0396 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+		E140519B2FEFF49B008F0396 /* cookie-export-banks.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "cookie-export-banks.json"; path = "Resources/cookie-export-banks.json"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E14051642FEFF49A008F0396 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		E140517F2FEFF49B008F0396 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E140515E2FEFF49A008F0396 = {
+			isa = PBXGroup;
+			children = (
+				E14051692FEFF49A008F0396 /* MoneyMoney Helper */,
+				E14051862FEFF49B008F0396 /* MoneyMoney Helper Extension */,
+				E14051682FEFF49A008F0396 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E14051682FEFF49A008F0396 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E14051672FEFF49A008F0396 /* MoneyMoney Helper.app */,
+				E14051822FEFF49B008F0396 /* MoneyMoney Helper Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E14051692FEFF49A008F0396 /* MoneyMoney Helper */ = {
+			isa = PBXGroup;
+			children = (
+				E140516A2FEFF49A008F0396 /* AppDelegate.swift */,
+				E14051762FEFF49A008F0396 /* ViewController.swift */,
+				E14051782FEFF49A008F0396 /* Main.storyboard */,
+				E140517B2FEFF49B008F0396 /* Assets.xcassets */,
+				E140517D2FEFF49B008F0396 /* Info.plist */,
+				E140516C2FEFF49A008F0396 /* Resources */,
+			);
+			path = "MoneyMoney Helper";
+			sourceTree = "<group>";
+		};
+		E140516C2FEFF49A008F0396 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				E140516D2FEFF49A008F0396 /* Main.html */,
+				E14051702FEFF49A008F0396 /* Icon.png */,
+				E14051722FEFF49A008F0396 /* Style.css */,
+				E14051742FEFF49A008F0396 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		E14051862FEFF49B008F0396 /* MoneyMoney Helper Extension */ = {
+			isa = PBXGroup;
+			children = (
+				E14051932FEFF49B008F0396 /* Resources */,
+				E14051872FEFF49B008F0396 /* SafariWebExtensionHandler.swift */,
+				E14051892FEFF49B008F0396 /* Info.plist */,
+			);
+			path = "MoneyMoney Helper Extension";
+			sourceTree = "<group>";
+		};
+		E14051932FEFF49B008F0396 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				E14051942FEFF49B008F0396 /* popup.js */,
+				E14051952FEFF49B008F0396 /* popup.html */,
+				E14051962FEFF49B008F0396 /* config.js */,
+				E14051972FEFF49B008F0396 /* README.md */,
+				E14051982FEFF49B008F0396 /* cookie-export.js */,
+				E14051992FEFF49B008F0396 /* icons */,
+				E140519A2FEFF49B008F0396 /* manifest.json */,
+				E140519B2FEFF49B008F0396 /* cookie-export-banks.json */,
+			);
+			name = Resources;
+			path = "MoneyMoney Helper Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E14051662FEFF49A008F0396 /* MoneyMoney Helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E14051902FEFF49B008F0396 /* Build configuration list for PBXNativeTarget "MoneyMoney Helper" */;
+			buildPhases = (
+				E14051632FEFF49A008F0396 /* Sources */,
+				E14051642FEFF49A008F0396 /* Frameworks */,
+				E14051652FEFF49A008F0396 /* Resources */,
+				E140518F2FEFF49B008F0396 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E14051852FEFF49B008F0396 /* PBXTargetDependency */,
+			);
+			name = "MoneyMoney Helper";
+			productName = "MoneyMoney Helper";
+			productReference = E14051672FEFF49A008F0396 /* MoneyMoney Helper.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E14051812FEFF49B008F0396 /* MoneyMoney Helper Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E140518C2FEFF49B008F0396 /* Build configuration list for PBXNativeTarget "MoneyMoney Helper Extension" */;
+			buildPhases = (
+				E140517E2FEFF49B008F0396 /* Sources */,
+				E140517F2FEFF49B008F0396 /* Frameworks */,
+				E14051802FEFF49B008F0396 /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "MoneyMoney Helper Extension";
+			productName = "MoneyMoney Helper Extension";
+			productReference = E14051822FEFF49B008F0396 /* MoneyMoney Helper Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E140515F2FEFF49A008F0396 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					E14051662FEFF49A008F0396 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					E14051812FEFF49B008F0396 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = E14051622FEFF49A008F0396 /* Build configuration list for PBXProject "MoneyMoney Helper" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E140515E2FEFF49A008F0396;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E14051682FEFF49A008F0396 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E14051662FEFF49A008F0396 /* MoneyMoney Helper */,
+				E14051812FEFF49B008F0396 /* MoneyMoney Helper Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E14051652FEFF49A008F0396 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				E14051712FEFF49A008F0396 /* Icon.png in Resources */,
+				E140517A2FEFF49A008F0396 /* Main.storyboard in Resources */,
+				E14051752FEFF49A008F0396 /* Script.js in Resources */,
+				E140516F2FEFF49A008F0396 /* Main.html in Resources */,
+				E140517C2FEFF49B008F0396 /* Assets.xcassets in Resources */,
+				E14051732FEFF49A008F0396 /* Style.css in Resources */,
+			);
+		};
+		E14051802FEFF49B008F0396 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				E140519E2FEFF49B008F0396 /* config.js in Resources */,
+				E14051A22FEFF49B008F0396 /* manifest.json in Resources */,
+				E140519C2FEFF49B008F0396 /* popup.js in Resources */,
+				E140519F2FEFF49B008F0396 /* README.md in Resources */,
+				E14051A12FEFF49B008F0396 /* icons in Resources */,
+				E14051A32FEFF49B008F0396 /* cookie-export-banks.json in Resources */,
+				E140519D2FEFF49B008F0396 /* popup.html in Resources */,
+				E14051A02FEFF49B008F0396 /* cookie-export.js in Resources */,
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E14051632FEFF49A008F0396 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				E14051772FEFF49A008F0396 /* ViewController.swift in Sources */,
+				E140516B2FEFF49A008F0396 /* AppDelegate.swift in Sources */,
+			);
+		};
+		E140517E2FEFF49B008F0396 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				E14051882FEFF49B008F0396 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E14051852FEFF49B008F0396 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E14051812FEFF49B008F0396 /* MoneyMoney Helper Extension */;
+			targetProxy = E14051842FEFF49B008F0396 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		E140516D2FEFF49A008F0396 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				E140516E2FEFF49A008F0396 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		E14051782FEFF49A008F0396 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				E14051792FEFF49A008F0396 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		E140518A2FEFF49B008F0396 /* Debug configuration for PBXProject "MoneyMoney Helper" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		E140518B2FEFF49B008F0396 /* Release configuration for PBXProject "MoneyMoney Helper" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		E140518D2FEFF49B008F0396 /* Debug configuration for PBXNativeTarget "MoneyMoney Helper Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MoneyMoney Helper Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "MoneyMoney Helper Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.MoneyMoney-Helper.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E140518E2FEFF49B008F0396 /* Release configuration for PBXNativeTarget "MoneyMoney Helper Extension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MoneyMoney Helper Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "MoneyMoney Helper Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.MoneyMoney-Helper.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E14051912FEFF49B008F0396 /* Debug configuration for PBXNativeTarget "MoneyMoney Helper" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MoneyMoney Helper/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "MoneyMoney Helper";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.MoneyMoney-Helper";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E14051922FEFF49B008F0396 /* Release configuration for PBXNativeTarget "MoneyMoney Helper" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "MoneyMoney Helper/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "MoneyMoney Helper";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourCompany.MoneyMoney-Helper";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E14051622FEFF49A008F0396 /* Build configuration list for PBXProject "MoneyMoney Helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E140518A2FEFF49B008F0396 /* Debug configuration for PBXProject "MoneyMoney Helper" */,
+				E140518B2FEFF49B008F0396 /* Release configuration for PBXProject "MoneyMoney Helper" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		E140518C2FEFF49B008F0396 /* Build configuration list for PBXNativeTarget "MoneyMoney Helper Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E140518D2FEFF49B008F0396 /* Debug configuration for PBXNativeTarget "MoneyMoney Helper Extension" */,
+				E140518E2FEFF49B008F0396 /* Release configuration for PBXNativeTarget "MoneyMoney Helper Extension" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		E14051902FEFF49B008F0396 /* Build configuration list for PBXNativeTarget "MoneyMoney Helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E14051912FEFF49B008F0396 /* Debug configuration for PBXNativeTarget "MoneyMoney Helper" */,
+				E14051922FEFF49B008F0396 /* Release configuration for PBXNativeTarget "MoneyMoney Helper" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E140515F2FEFF49A008F0396 /* Project object */;
+	validationLevel = 1;
+}
