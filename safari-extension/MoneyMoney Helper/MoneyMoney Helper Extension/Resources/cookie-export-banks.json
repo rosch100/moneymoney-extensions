@@ -1,0 +1,56 @@
+{
+  "fidelity": {
+    "label": "Fidelity",
+    "match_host": "(?:^|\\.)fidelity\\.com$",
+    "domains": [".fidelity.com", "fidelity.com"],
+    "origins": [
+      "https://digital.fidelity.com",
+      "https://login.fidelity.com",
+      "https://www.fidelity.com",
+      "https://ecaap.fidelity.com"
+    ],
+    "session_host": "digital.fidelity.com",
+    "critical": ["ATC", "_abck"],
+    "allow_duplicate_names": [],
+    "priority": [
+      "_abck", "bm_sz", "bm_s", "bm_sv", "bm_so", "bm_ss", "bm_mi", "bm_lso", "ak_bmsc",
+      "ATC", "ATT", "ET", "SESSION_SCTX", "JSESSIONID",
+      "FC", "MC", "PIT", "RC", "SC",
+      "PORTSUM_XSRF-TOKEN", "FVL-XSRF-TOKEN",
+      "AWSALB", "AWSALBCORS"
+    ]
+  },
+  "boa": {
+    "label": "Bank of America",
+    "match_host": "(?:^|\\.)bankofamerica\\.com$",
+    "domains": [".bankofamerica.com", "bankofamerica.com"],
+    "origins": [
+      "https://secure.bankofamerica.com",
+      "https://www.bankofamerica.com"
+    ],
+    "session_host": "secure.bankofamerica.com",
+    "critical": ["SMSESSION", "SSOTOKEN"],
+    "allow_duplicate_names": [],
+    "priority": [
+      "SMSESSION", "SSOTOKEN", "LSESSIONID", "GSID", "CSID", "MMID", "cdSNum", "ctd",
+      "bm_sv", "bm_sz", "bmuid", "ak_bmsc"
+    ]
+  },
+  "mlp": {
+    "label": "MLP Versicherungen",
+    "match_host": "(?:^|\\.)mlp\\.de$",
+    "domains": [".mlp.de", "mlp.de", "vue.mlp.de"],
+    "origins": [
+      "https://vue.mlp.de",
+      "https://kundenportal.mlp.de",
+      "https://financepilot-pe.mlp.de"
+    ],
+    "session_host": "vue.mlp.de",
+    "critical": ["VUSESSIONID"],
+    "allow_duplicate_names": ["VUSESSIONID"],
+    "priority": [
+      "VUSESSIONID",
+      "BIGipServervue.mlp.de"
+    ]
+  }
+}
