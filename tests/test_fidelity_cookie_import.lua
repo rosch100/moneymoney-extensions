@@ -24,9 +24,13 @@ function Connection()
     request = function(self, method, url, body, contentType, headers)
       capturedHeaders = headers
       capturedRequest = { method = method, url = url, body = body, contentType = contentType }
-      -- Erfolgreiche Cookie-Validierung: Body enthält "portfolio"
-      if url and url:find("portfolio/summary", 1, true) then
-        return "Portfolio Summary", nil
+      -- Erfolgreiche Session-Validierung via GraphQL
+      if url and url:find("picoserver/api/graphql", 1, true) then
+        return "GRAPHQL_OK", nil
+      end
+      -- REST-Fallback Validierung
+      if url and url:find("portfolio/api/GetContext", 1, true) then
+        return "GETCONTEXT_OK", nil
       end
       return "not ok", nil
     end
@@ -37,6 +41,51 @@ MM = {
   printStatus = function(_) end,
   urlencode = function(s) return tostring(s) end
 }
+
+-- Minimaler JSON-Stub für die Fidelity-Extension-Validierung
+JSON = function(input)
+  if input ~= nil then
+    return {
+      dictionary = function()
+        if input ~= "GRAPHQL_OK" and input ~= "GETCONTEXT_OK" then
+          error("invalid json")
+        end
+        if input == "GRAPHQL_OK" then
+          return {
+            data = {
+              getContext = {
+                person = {
+                  assets = {
+                    {
+                      acctNum = "123",
+                      acctType = "Brokerage",
+                      acctSubType = "Brokerage",
+                      acctSubTypeDesc = "Account",
+                      gainLossBalanceDetail = { totalMarketVal = "22060.27" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        end
+
+        return {
+          totalMarketVal = 22060.27
+        }
+      end
+    }
+  end
+
+  return {
+    set = function(self, _)
+      return self
+    end,
+    json = function()
+      return "{}"
+    end
+  }
+end
 
 local function assertEq(actual, expected, label)
   if actual == expected then
