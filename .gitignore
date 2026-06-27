@@ -12,8 +12,15 @@
 *.har
 *_cookies.txt
 
+# Python-Caches
+**/__pycache__/
+*.pyc
+
 # Lokale Reverse-Engineering-Referenz (nicht veröffentlichen)
 /docs/UNDOCUMENTED-MM-LUA-API.md
+
+# Xcode: benutzerspezifische UI/Workspace-States
+safari-extension/**/xcuserdata/
 
 # Nur Dateien aus extensions/, scripts/, docs/ und tests/ ins Repo,
 # Lua-Dateien im Root ausschließen (Entwicklungs-Scratch).
