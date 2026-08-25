@@ -3,7 +3,6 @@
  * @property {string} id
  * @property {string} label
  * @property {RegExp} matchHost
- * @property {string[]} domains
  * @property {string[]} origins
  * @property {string} [sessionHost]
  * @property {string[]} critical
@@ -43,10 +42,11 @@ export function formatCookieExport(cookies, bank) {
   const usedNames = new Set();
 
   for (const dupName of bank.allowDuplicateNames) {
-    cookies
-      .filter((cookie) => cookie.name === dupName)
-      .forEach((cookie) => pairs.push(`${cookie.name}=${cookie.value}`));
-    if (cookies.some((cookie) => cookie.name === dupName)) {
+    const matches = cookies.filter((cookie) => cookie.name === dupName);
+    for (const cookie of matches) {
+      pairs.push(`${cookie.name}=${cookie.value}`);
+    }
+    if (matches.length > 0) {
       usedNames.add(dupName);
     }
   }
@@ -57,7 +57,7 @@ export function formatCookieExport(cookies, bank) {
     }
     const match = cookies.find((cookie) => cookie.name === name);
     if (match) {
-      pairs.push(`${name}=${match.value}`);
+      pairs.push(`${match.name}=${match.value}`);
       usedNames.add(name);
     }
   }
@@ -67,7 +67,6 @@ export function formatCookieExport(cookies, bank) {
     .sort((a, b) => a.name.localeCompare(b.name));
   for (const cookie of rest) {
     pairs.push(`${cookie.name}=${cookie.value}`);
-    usedNames.add(cookie.name);
   }
 
   return `COOKIE:${pairs.join(';')}`;
@@ -85,11 +84,11 @@ export function missingCritical(cookies, bank) {
 
 /**
  * @param {BankConfig} bank
- * @param {CookieEntry[]} cookies
+ * @param {string[]} missing
  * @param {string} tabHost
  */
-export function buildHint(bank, cookies, tabHost) {
-  if (missingCritical(cookies, bank).length === 0) {
+export function buildHint(bank, missing, tabHost) {
+  if (missing.length === 0) {
     return '';
   }
   if (bank.sessionHost && tabHost !== bank.sessionHost) {
@@ -104,18 +103,25 @@ export function buildHint(bank, cookies, tabHost) {
   if (bank.id === 'boa') {
     return 'Kontoübersicht auf secure.bankofamerica.com öffnen.';
   }
-  const missing = missingCritical(cookies, bank);
   return `Fehlende Cookies: ${missing.join(', ')}`;
 }
 
 /**
+ * @typedef {Object} CookieCollectResult
+ * @property {CookieEntry[]} cookies
+ * @property {string[]} failedOrigins Origins, deren cookies.getAll fehlgeschlagen ist
+ */
+
+/**
  * @param {import('./config.js').browserApi} api
  * @param {BankConfig} bank
- * @returns {Promise<CookieEntry[]>}
+ * @returns {Promise<CookieCollectResult>}
  */
 export async function collectCookies(api, bank) {
   /** @type {Map<string, CookieEntry>} */
   const merged = new Map();
+  /** @type {string[]} */
+  const failedOrigins = [];
 
   /**
    * @param {chrome.cookies.Cookie} item
@@ -124,11 +130,16 @@ export async function collectCookies(api, bank) {
     return `${item.name}|${item.domain}|${item.path}|${item.storeId ?? ''}`;
   }
 
-  async function addFromQuery(details) {
+  /**
+   * @param {string} origin
+   */
+  async function addFromOrigin(origin) {
+    const url = `${origin}/`;
     let list = [];
     try {
-      list = await api.cookies.getAll(details);
+      list = await api.cookies.getAll({ url });
     } catch {
+      failedOrigins.push(origin);
       return;
     }
     for (const item of list) {
@@ -144,13 +155,13 @@ export async function collectCookies(api, bank) {
     }
   }
 
-  for (const domain of bank.domains) {
-    await addFromQuery({ domain: domain.replace(/^\./, '') });
-  }
-
+  // host_permissions == origins (keine *.domain-Wildcards wegen Safari 27)
   for (const origin of bank.origins) {
-    await addFromQuery({ url: `${origin}/` });
+    await addFromOrigin(origin);
   }
 
-  return Array.from(merged.values());
+  return {
+    cookies: Array.from(merged.values()),
+    failedOrigins,
+  };
 }

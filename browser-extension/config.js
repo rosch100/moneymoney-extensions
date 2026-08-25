@@ -14,7 +14,6 @@ export function parseBankConfig(raw) {
       id,
       label: String(item.label),
       matchHost: new RegExp(String(item.match_host), 'i'),
-      domains: /** @type {string[]} */ (item.domains),
       origins: /** @type {string[]} */ (item.origins),
       sessionHost: item.session_host ? String(item.session_host) : undefined,
       critical: /** @type {string[]} */ (item.critical),

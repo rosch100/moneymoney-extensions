@@ -45,16 +45,33 @@ async function refresh(banks) {
   }
 
   titleEl.textContent = bank.label;
-  const cookies = await collectCookies(browserApi, bank);
+  const { cookies, failedOrigins } = await collectCookies(browserApi, bank);
   currentExport = formatCookieExport(cookies, bank);
 
   const missing = missingCritical(cookies, bank);
-  hintEl.textContent = buildHint(bank, cookies, host);
+  hintEl.textContent = buildHint(bank, missing, host);
+
+  if (failedOrigins.length > 0 && cookies.length === 0) {
+    setStatus('Cookie-Zugriff fehlgeschlagen', 'error');
+    hintEl.textContent =
+      'Berechtigung für diese Bank-Seite fehlt oder wurde verweigert (Safari: Extension in der Toolbar erlauben).';
+    copyBtn.disabled = true;
+    return;
+  }
 
   if (cookies.length === 0) {
     setStatus('Nicht eingeloggt oder keine Cookies', 'error');
     copyBtn.disabled = true;
     return;
+  }
+
+  if (failedOrigins.length > 0) {
+    hintEl.textContent = [
+      hintEl.textContent,
+      `Teilweise kein Cookie-Zugriff: ${failedOrigins.join(', ')}`,
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
 
   if (missing.length === 0) {

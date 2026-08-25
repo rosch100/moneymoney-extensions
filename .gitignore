@@ -22,6 +22,9 @@
 # Xcode: benutzerspezifische UI/Workspace-States
 safari-extension/**/xcuserdata/
 
+# Lokale Nebenprojekte / Scratch (nicht committen)
+/Amazon-MoneyMoney/
+
 # Nur Dateien aus extensions/, scripts/, docs/ und tests/ ins Repo,
 # Lua-Dateien im Root ausschließen (Entwicklungs-Scratch).
 /*.lua

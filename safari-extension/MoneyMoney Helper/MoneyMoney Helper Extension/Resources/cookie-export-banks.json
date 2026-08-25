@@ -2,7 +2,6 @@
   "fidelity": {
     "label": "Fidelity",
     "match_host": "(?:^|\\.)fidelity\\.com$",
-    "domains": [".fidelity.com", "fidelity.com"],
     "origins": [
       "https://digital.fidelity.com",
       "https://login.fidelity.com",
@@ -23,7 +22,6 @@
   "boa": {
     "label": "Bank of America",
     "match_host": "(?:^|\\.)bankofamerica\\.com$",
-    "domains": [".bankofamerica.com", "bankofamerica.com"],
     "origins": [
       "https://secure.bankofamerica.com",
       "https://www.bankofamerica.com"
@@ -39,7 +37,6 @@
   "mlp": {
     "label": "MLP Versicherungen",
     "match_host": "(?:^|\\.)mlp\\.de$",
-    "domains": [".mlp.de", "mlp.de", "vue.mlp.de"],
     "origins": [
       "https://vue.mlp.de",
       "https://kundenportal.mlp.de",

@@ -23,16 +23,12 @@ Session-Cookies wie `SMSESSION`, `ATC` oder `VUSESSIONID` sind **HttpOnly**. Use
 
 Safari benötigt ein Xcode-Projekt als Hülle. Voraussetzung: **Xcode** oder **Xcode-beta** (nicht nur Command Line Tools).
 
-Falls `xcode-select` noch auf CLT zeigt, reicht oft:
+Zuerst WebExtension-Dateien nach Safari syncen (siehe [Entwicklung](#entwicklung)).
+
+Falls `xcode-select` noch auf CLT zeigt:
 
 ```bash
 sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
-```
-
-(`build-safari-extension.sh` findet Xcode/Xcode-beta alternativ automatisch über `DEVELOPER_DIR`.)
-
-```bash
-./scripts/build-safari-extension.sh
 ```
 
 Danach in Xcode:
@@ -45,9 +41,7 @@ Danach in Xcode:
 
 > Fehler *„Please select an available device…“* → Destination oben in Xcode auf **My Mac** stellen (nicht iPhone/iOS-Simulator).
 
-Das generierte Projekt liegt in `safari-extension/` (gitignored, bei Bedarf neu erzeugen).
-
-Alternativ ohne Build-Skript (Xcode installiert):
+Alternativ ohne bestehendes Projekt (Xcode installiert):
 
 ```bash
 xcrun safari-web-extension-converter browser-extension \
@@ -66,7 +60,7 @@ xcrun safari-web-extension-converter browser-extension \
 
 | Datei | Zweck |
 |-------|--------|
-| `cookie-export-banks.json` | SSOT: Banken, Domains, Cookie-Priorität |
+| `cookie-export-banks.json` | SSOT: Banken, Origins, Cookie-Priorität |
 | `config.js` | JSON laden, `browser`/`chrome`-API |
 | `cookie-export.js` | Sammeln, Formatieren, Validierung |
 | `popup.js` | UI-Logik |
@@ -76,16 +70,26 @@ Icons: `python3 scripts/generate-extension-icons.py`
 ## Berechtigungen (Minimalprinzip)
 
 - `cookies` — lesen (kein Schreiben)
-- `host_permissions` — nur Fidelity, BoA, MLP-Domains
+- `host_permissions` — konkrete Origins aus `cookie-export-banks.json` (keine `*.domain`-Wildcards; Safari 27 crasht sonst in Websites Preferences); Cookie-Abfrage nur über diese Origins
 - Kein `activeTab`, kein `clipboardWrite` (Clipboard via Nutzerklick im Popup)
+
+### Safari / macOS 27
+
+Extension in **Safari → Einstellungen → Erweiterungen** aktivieren. **„Websites bearbeiten“ / Edit Websites** nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar auf der Bank-Seite erlauben.
 
 ## Entwicklung
 
-Konfiguration oder Logik geändert → Extension in `chrome://extensions` neu laden.
+Konfiguration oder Logik in `browser-extension/` geändert:
+
+```bash
+python3 scripts/sync_safari_extension_resources.py
+```
+
+Danach Chrome/Firefox neu laden bzw. Safari per Xcode Run. Das Sync-Skript leitet `host_permissions` aus `cookie-export-banks.json` ab, kopiert Shared Resources und entfernt verwaiste Safari-Dateien.
 
 Tests:
 
 ```bash
-python3 tests/test_cookie_export_config.py
+python3 tests/test_browser_extension_manifest.py
 python3 tests/test_external_scripts_conformance.py
 ```
