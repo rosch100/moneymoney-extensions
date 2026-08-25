@@ -127,9 +127,10 @@ def sync_safari_resources() -> tuple[list[str], list[str]]:
     Returns: (copied_rel_paths, pruned_rel_paths)
     """
     assert_true(SAFARI_RES.is_dir(), f"fehlt: {SAFARI_RES}")
-    expected = {str(path.relative_to(BROWSER)) for path in shared_browser_files()}
+    browser_paths = shared_browser_files()
+    expected = {str(path.relative_to(BROWSER)) for path in browser_paths}
     copied: list[str] = []
-    for browser_path in shared_browser_files():
+    for browser_path in browser_paths:
         rel = browser_path.relative_to(BROWSER)
         safari_path = SAFARI_RES / rel
         safari_path.parent.mkdir(parents=True, exist_ok=True)
