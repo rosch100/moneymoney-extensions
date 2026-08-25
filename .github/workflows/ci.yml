@@ -72,6 +72,14 @@ jobs:
             python3 -m py_compile "$file"
           done < <(git ls-files '*.py')
 
+      - name: Python unit tests (tracked tests/*.py)
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            python3 "$f"
+          done < <(git ls-files 'tests/*.py')
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:

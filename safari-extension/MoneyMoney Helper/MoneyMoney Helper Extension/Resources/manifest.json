@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
   "name": "MoneyMoney Helper",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Vollständige Session-Cookies (inkl. HttpOnly) für MoneyMoney Web-Banking Extensions",
   "permissions": ["cookies"],
   "host_permissions": [
-    "https://*.fidelity.com/*",
-    "https://fidelity.com/*",
-    "https://*.bankofamerica.com/*",
-    "https://bankofamerica.com/*",
-    "https://*.mlp.de/*"
+    "https://digital.fidelity.com/*",
+    "https://login.fidelity.com/*",
+    "https://www.fidelity.com/*",
+    "https://ecaap.fidelity.com/*",
+    "https://secure.bankofamerica.com/*",
+    "https://www.bankofamerica.com/*",
+    "https://vue.mlp.de/*",
+    "https://kundenportal.mlp.de/*",
+    "https://financepilot-pe.mlp.de/*"
   ],
   "action": {
     "default_title": "MoneyMoney Helper",
