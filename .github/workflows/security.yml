@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -32,10 +33,10 @@ jobs:
           fetch-depth: 0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        # gitleaks-action v2 konfiguriert über Env-Variablen; kein `with: args` nutzen.
-        # Standardverhalten ist bereits „redact“-freundlich; bei Bedarf kann man über
-        # GITLEAKS_CONFIG / GITLEAKS_VERSION weiter feinjustieren.
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE only required for organization repos, not personal accounts.
 
   python-sast:
     name: Python SAST (bandit)

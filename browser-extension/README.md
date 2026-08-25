@@ -25,9 +25,12 @@ Safari benötigt ein Xcode-Projekt als Hülle. Voraussetzung: **Xcode** oder **X
 
 Zuerst WebExtension-Dateien nach Safari syncen (siehe [Entwicklung](#entwicklung)).
 
-Falls `xcode-select` noch auf CLT zeigt:
+Falls `xcode-select` noch auf die Command Line Tools zeigt, auf die installierte Xcode-App umstellen (Pfad anpassen):
 
 ```bash
+# Standard-Xcode:
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+# oder Xcode-beta:
 sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
 ```
 
