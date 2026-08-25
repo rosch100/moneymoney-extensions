@@ -33,16 +33,29 @@ COOKIE:name=value;name2=value2
 
 Benutzername ist bei Beta-Extensions irrelevant.
 
-### Ablauf
+### Ablauf (empfohlen: Safari Extension)
 
 1. Im Browser vollständig einloggen (inkl. MFA)
 2. Kontoseite / Vertragsübersicht öffnen
-3. Cookies exportieren (HAR oder Tampermonkey)
-4. `COOKIE:…`-String als Passwort einfügen
+3. Cookies mit der **MoneyMoney Helper**-Extension kopieren (siehe unten)
+4. `COOKIE:…`-String als Passwort in MoneyMoney einfügen
 
 Session wird in `LocalStorage` persistiert; Folge-Syncs nutzen gespeicherte Cookies, solange die Session gültig ist.
 
-### Export per HAR
+### 1. Safari Extension (empfohlen)
+
+**Empfohlene Methode:** Session-Cookies inkl. HttpOnly über die offizielle Browser-API — zuverlässig unter Safari (macOS).
+
+1. Extension bauen/starten: siehe [browser-extension/README.md](browser-extension/README.md) (Safari: Xcode Run der Hüllen-App)
+2. Safari → **Einstellungen → Erweiterungen** → **MoneyMoney Helper** aktivieren  
+   (unter macOS 27 **nicht** „Websites bearbeiten“ öffnen — Safari-Bug)
+3. Bank-Seite öffnen; ggf. Zugriff über die Safari-Toolbar erlauben
+4. Extension-Icon → **Cookies kopieren**
+5. In MoneyMoney ins Passwortfeld einfügen (`COOKIE:…`)
+
+Dieselbe Extension funktioniert auch in Chrome, Edge, Brave und Firefox (Installation ohne Xcode, siehe README der Extension).
+
+### 2. Export per HAR (Alternative)
 
 DevTools → Network → **Save all as HAR**, dann:
 
@@ -52,6 +65,10 @@ DevTools → Network → **Save all as HAR**, dann:
 | Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | `ATC`, `FC`, `RC`, `SC`, `MC`, `_abck`, `bm_*` |
 | MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` | `VUSESSIONID` von `vue.mlp.de` |
 
+### 3. Tampermonkey (optional)
+
+`scripts/moneymoney-cookie-exporter.user.js` — **Alt+C** auf der Kontoseite. In Safari oft **keine** HttpOnly-Cookies; dafür die Safari Extension oder HAR verwenden.
+
 ### Fidelity: dauerhafte Session
 
 Nach SMS-MFA **„Don't ask me again on this device“** aktivieren, erst nach **Portfolio Summary** exportieren.
@@ -59,10 +76,6 @@ Nach SMS-MFA **„Don't ask me again on this device“** aktivieren, erst nach *
 ### MLP: Vue-Session
 
 Vertragsübersicht auf `vue.mlp.de` öffnen, bevor exportiert wird. Beim ersten Zugriff SSL-Zertifikat für `vue.mlp.de` in MoneyMoney bestätigen.
-
-### Tampermonkey (optional)
-
-`scripts/moneymoney-cookie-exporter.user.js` — **Alt+C** auf der Kontoseite. In Safari keine HttpOnly-Cookies; dann HAR verwenden.
 
 ## Direct-Login (Presidential Bank, Shareview)
 
@@ -79,6 +92,7 @@ Username + Passwort + Geburtsdatum + MFA. Für Background-Sync: `username|TT.MM.
 | Dokument | Inhalt |
 |----------|--------|
 | [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
+| [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper (Safari/Chrome/…) — Cookie-Export |
 | [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Extensions (Login, Cookie-Import, Abruf) |
 | [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Fehlende Engine-APIs für Direct-Login |
 
