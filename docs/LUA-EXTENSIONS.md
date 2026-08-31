@@ -119,10 +119,9 @@ WebBanking{
 | Kontotyp | `AccountTypePortfolio` (Versicherungsdepots) |
 | Login | `COOKIE:VUSESSIONID=…;BIGipServervue.mlp.de=…` |
 
-Cookies von **`vue.mlp.de`** nach Öffnen der Vertragsübersicht. JWE-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
-
-Der Username-/Passwort-Pfad ist einschließlich JWE-Verschlüsselung und
-SecureGo-Plus-MFA implementiert. Er wird nur verwendet, wenn MoneyMoney die
+Cookies von **`vue.mlp.de`** werden nach dem Öffnen der Vertragsübersicht
+benötigt. Der Username-/Passwort-Pfad ist einschließlich JWE-Verschlüsselung
+und SecureGo-Plus-MFA implementiert. Er wird nur verwendet, wenn MoneyMoney die
 benötigten Zufalls-, Base64url-, RSA- und A256GCM-APIs bereitstellt; andernfalls
 fordert die Extension den Cookie-Import an. SecureGo Plus kann als
 App-Bestätigung oder als anschließende TAN-Abfrage erscheinen.

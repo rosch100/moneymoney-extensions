@@ -98,10 +98,10 @@ do
   assertEq(v3, "DISP-2", "extractAccountNumber.table.displayValue")
 
   local v4 = extractAccountNumber(nil)
-  assertEq(v4, "unknown", "extractAccountNumber.nil")
+  assertEq(v4, nil, "extractAccountNumber.nil")
 end
 
--- buildWebsiteAccountLabel / buildAccountNumberForMoneyMoney
+-- buildWebsiteAccountLabel
 do
   local fullAccount = "12345678"
   local maskSuffix = "*5678"
@@ -114,19 +114,19 @@ do
   )
   assertEq(websiteLabel, nickname .. " " .. maskSuffix, "buildWebsiteAccountLabel.fromApi")
 
-  local fromFull = buildAccountNumberForMoneyMoney(
+  local fromFull = buildWebsiteAccountLabel(
     { nickname = nickname },
     fullAccount,
     maskSuffix
   )
-  assertEq(fromFull, nickname .. " " .. maskSuffix, "buildAccountNumberForMoneyMoney.neverExposesFullNumber")
+  assertEq(fromFull, nickname .. " " .. maskSuffix, "buildWebsiteAccountLabel.neverExposesFullNumber")
 
-  local fallback = buildAccountNumberForMoneyMoney(
+  local fallback = buildWebsiteAccountLabel(
     { nickname = nickname },
-    "unknown",
+    nil,
     maskSuffix
   )
-  assertEq(fallback, nickname .. " " .. maskSuffix, "buildAccountNumberForMoneyMoney.fallbackToWebsiteLabel")
+  assertEq(fallback, nickname .. " " .. maskSuffix, "buildWebsiteAccountLabel.fallbackToWebsiteLabel")
 
   local maskedOnly = buildWebsiteAccountLabel({}, fullAccount, nil)
   assertEq(maskedOnly, maskSuffix, "buildWebsiteAccountLabel.maskedOnly")
@@ -160,6 +160,34 @@ do
     }
   })
   assertEq(maskedAccounts[1].accountNumber, nickname .. " " .. maskSuffix, "parseAccounts.accountNumber.websiteFallback")
+
+  local availableBalanceAccounts = parseAccounts({
+    {
+      id = "D2",
+      nickname = nickname,
+      accountNumber = fullAccount,
+      accountType = "checking",
+      balance = "invalid",
+      availableBalance = "42.50",
+    }
+  })
+  assertEq(availableBalanceAccounts[1]._balance, 42.5,
+    "parseAccounts.usesValidAvailableBalance")
+
+  local missingNumberOk = pcall(parseAccounts, {
+    {id = "D3", nickname = nickname, accountType = "checking"}
+  })
+  assertEq(missingNumberOk, false, "parseAccounts.rejectsMissingNumber")
+
+  local missingNameOk = pcall(parseAccounts, {
+    {id = "D4", accountNumber = fullAccount, accountType = "checking"}
+  })
+  assertEq(missingNameOk, false, "parseAccounts.rejectsMissingName")
+
+  local unknownTypeOk = pcall(parseAccounts, {
+    {id = "D5", nickname = nickname, accountNumber = fullAccount, accountType = "unknown"}
+  })
+  assertEq(unknownTypeOk, false, "parseAccounts.rejectsUnknownType")
 end
 
 -- mapAccountType
@@ -169,7 +197,7 @@ do
   assertEq(mapAccountType("credit"), AccountTypeCreditCard, "mapAccountType.credit")
   assertEq(mapAccountType("loan"), AccountTypeLoan, "mapAccountType.loan")
   assertEq(mapAccountType("investment"), AccountTypeSecurities, "mapAccountType.investment")
-  assertEq(mapAccountType("unknown-type"), AccountTypeGiro, "mapAccountType.unknown-fallback")
+  assertEq(mapAccountType("unknown-type"), nil, "mapAccountType.unknown")
 end
 
 -- isValidAccountId
@@ -189,6 +217,7 @@ do
   local mdY = os.time({ year = 1970, month = 1, day = 1 })
   local parsed2 = parseDate("1/1/1970")
   assertEq(parsed2, mdY, "parseDate.mdy")
+  assertEq(parseDate("2026-02-31"), nil, "parseDate.rejectsInvalidCalendarDay")
 end
 
 -- extractCookieValue
@@ -515,6 +544,133 @@ do
     error("Auth error classification failed: " .. table.concat(authFailures, ", "))
   end
 end
+
+local invalidRefreshOk, invalidRefreshError = pcall(RefreshAccount, nil, nil)
+assertEq(invalidRefreshOk, false, "RefreshAccount.propagatesInvalidAccount")
+assertEq(
+  type(invalidRefreshError) == "string"
+    and invalidRefreshError:find("Kontoabruf", 1, true) ~= nil,
+  true,
+  "RefreshAccount.invalidAccountMessage")
+
+local missingBalanceOk, missingBalanceError = pcall(parseTransactions, {}, nil)
+assertEq(missingBalanceOk, false, "parseTransactions.requiresBalance")
+assertEq(
+  type(missingBalanceError) == "string"
+    and missingBalanceError:find("Kontostand", 1, true) ~= nil,
+  true,
+  "parseTransactions.missingBalanceMessage")
+local emptyTransactions = parseTransactions({}, 12.34)
+assertEq(emptyTransactions.balance, 12.34, "parseTransactions.accountBalance")
+local retainedAccountBalance = parseTransactions(
+  {
+    {
+      amount = "1.00",
+      creditTransaction = false,
+      transactionDate = "2026-08-31",
+      ledgerBalance = "9.99",
+      generatedDescription = "Debit",
+    },
+  },
+  12.34)
+assertEq(retainedAccountBalance.balance, 12.34,
+  "parseTransactions.prefersProvidedAccountBalance")
+local invalidAmountOk, invalidAmountError = pcall(
+  parseTransactions,
+  {
+    {
+      amount = "invalid",
+      transactionDate = "2026-08-31",
+      generatedDescription = "Invalid amount",
+    }
+  },
+  12.34)
+assertEq(invalidAmountOk, false, "parseTransactions.rejectsInvalidAmount")
+assertEq(
+  type(invalidAmountError) == "string"
+    and invalidAmountError:find("Umsatzbetrag", 1, true) ~= nil,
+  true,
+  "parseTransactions.invalidAmountMessage")
+local invalidDateOk, invalidDateError = pcall(
+  parseTransactions,
+  {
+    {
+      amount = "12.34",
+      creditTransaction = false,
+      transactionDate = "invalid",
+      generatedDescription = "Invalid date",
+    }
+  },
+  12.34)
+assertEq(invalidDateOk, false, "parseTransactions.rejectsInvalidDate")
+assertEq(
+  type(invalidDateError) == "string"
+    and invalidDateError:find("Umsatzdatum", 1, true) ~= nil,
+  true,
+  "parseTransactions.invalidDateMessage")
+
+local originalListAccounts = ListAccounts
+ListAccounts = function()
+  return {
+    {
+      accountNumber = "Checking *9999",
+      name = "Different account",
+      _internalId = "OTHER-ID",
+    },
+  }
+end
+assertEq(
+  resolveAccountId({ accountNumber = "Checking *1234", name = "Expected account" }),
+  nil,
+  "resolveAccountId.rejectsUnmatchedSingleAccount")
+ListAccounts = function()
+  return {
+    { accountNumber = "Checking *1111", name = "Shared", _internalId = "ID-1" },
+    { accountNumber = "Checking *2222", name = "Shared", _internalId = "ID-2" },
+  }
+end
+assertEq(
+  resolveAccountId({ accountNumber = "Checking *9999", name = "Shared" }),
+  nil,
+  "resolveAccountId.rejectsAmbiguousName")
+assertEq(
+  resolveAccountId({_internalId = "0", accountNumber = "Checking *9999"}),
+  nil,
+  "resolveAccountId.rejectsInvalidStoredId")
+ListAccounts = function()
+  return {
+    {
+      accountNumber = "Checking *1234",
+      name = "Expected account",
+      _internalId = "MATCH-ID",
+      _balance = 98.76,
+    },
+  }
+end
+local resolvedAccountId, resolvedBalance = resolveAccountId({
+  accountNumber = "Checking *1234",
+  name = "Expected account",
+})
+assertEq(resolvedAccountId, "MATCH-ID", "resolveAccountId.exactNumber")
+assertEq(resolvedBalance, 98.76, "resolveAccountId.propagatesDiscoveredBalance")
+ListAccounts = originalListAccounts
+
+local missingDirectionOk, missingDirectionError = pcall(
+  parseTransactions,
+  {
+    {
+      amount = "12.34",
+      transactionDate = "2026-08-31",
+      generatedDescription = "Unknown direction",
+    },
+  },
+  12.34)
+assertEq(missingDirectionOk, false, "parseTransactions.requiresDirection")
+assertEq(
+  type(missingDirectionError) == "string"
+    and missingDirectionError:find("Umsatzrichtung", 1, true) ~= nil,
+  true,
+  "parseTransactions.missingDirectionMessage")
 
 print("ALL PRESIDENTIAL BANK UNIT TESTS PASSED")
 

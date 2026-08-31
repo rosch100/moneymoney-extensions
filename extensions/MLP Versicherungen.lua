@@ -66,12 +66,7 @@ function generateRandomBytes(length)
   if type(MM.random) == "function" then
     return MM.random(length)
   end
-  -- Fallback: pseudo-random (nicht kryptografisch sicher!)
-  local result = ""
-  for i = 1, length do
-    result = result .. string.char(math.random(0, 255))
-  end
-  return result
+  error("MLP Versicherungen: MM.random ist für kryptografisch sichere Zufallsdaten erforderlich.")
 end
 
 function aes256Encrypt(key, iv, plaintext)
@@ -423,6 +418,9 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   end
 
   if session.state == "awaitingMfa" then
+    local canReuse, storage = restoreConnection(session.username or "")
+    restorePersistedSessionCookies(storage, canReuse)
+    applySessionCookiesToConnection()
     return submitMfaCode(credentials[1])
   end
 
@@ -510,6 +508,16 @@ function tryPersistedAuth(storage)
   return false
 end
 
+local function isCredentialRejectionMessage(message)
+  if type(message) ~= "string" then
+    return false
+  end
+  local normalized = message:lower()
+  return normalized:find("ungültige anmeldedaten", 1, true) ~= nil
+    or normalized:find("invalid_grant", 1, true) ~= nil
+    or normalized:find("invalid credentials", 1, true) ~= nil
+end
+
 function loginStep1(credentials, interactive)
   local username = credentials[1]
   local password = credentials[2]
@@ -575,10 +583,12 @@ function loginStep1(credentials, interactive)
     }
   end
 
+  if isCredentialRejectionMessage(loginResult.error) then
+    return LoginFailed
+  end
   if loginResult.needsCookie or (loginResult.error and (loginResult.error:find("403") or loginResult.error:find("JOSE"))) then
     return tryCookieAuth()
   end
-
   return loginResult.error or "Login fehlgeschlagen."
 end
 
@@ -676,8 +686,11 @@ function parseLoginResponse(content)
   end
 
   if response.error then
-    if response.error == "invalid_grant" or response.error == "invalid_request" then
+    if response.error == "invalid_grant" then
       return { success = false, error = "Ungültige Anmeldedaten." }
+    end
+    if response.error == "invalid_request" then
+      return { success = false, error = "Token-Anfrage vom Server abgelehnt." }
     end
     if response.error == "mfa_required" or response.error == "second_factor_required" then
       return {
@@ -1396,44 +1409,61 @@ function mapVueContractToInternal(item)
     tariff = bestPos.posTypeShort
   end
 
-  local shareValue = tonumber(item.shareValue) or 0
-  local contribution = tonumber(item.contribution) or 0
+  local shareValue = tonumber(item.shareValue)
+  local contribution = tonumber(item.contribution)
+  local specificAttributes = {}
+  if contribution then
+    specificAttributes.netContribution = {
+      value = contribution,
+      displayValue = formatCurrency(contribution)
+    }
+  end
 
   return {
     id = item.id or contractNumber,
     number = contractNumber,
     company = {
-      shortName = item.companyShortName or "Unbekannt",
-      longName = item.companyLongName or item.companyShortName or "Unbekannt"
+      shortName = item.companyShortName,
+      longName = item.companyLongName or item.companyShortName
     },
     contribution = contribution,
     validFrom = item.created,
-    state = "aktiv",
+    state = item.state,
     tariff = tariff,
     contractType = contractType,
     shareValue = shareValue,
     currency = "EUR",
-    specificAttributes = {
-      netContribution = { value = contribution, displayValue = formatCurrency(contribution) }
-    }
+    specificAttributes = specificAttributes
   }
 end
 
 function mapApiContractToInternal(item)
   if not item then return nil end
   local company = item.company or {}
-  local companyShort = company.shortName or company.name or "Unbekannt"
+  local companyShort = company.shortName or company.name
   local contractNumber = item.number or item.contractNumber or item.vertragsnummer or item.id
   if not contractNumber then return nil end
 
   local contractType = item.contractType or item.vertragsArt or item.posType or item.type
-  local shareValue = tonumber(item.shareValue or item.rueckkaufswert or item.value) or 0
-  local contribution = tonumber(item.contribution or item.beitrag or item.premium) or 0
+  local shareValue = tonumber(item.shareValue or item.rueckkaufswert or item.value)
+  local contribution = tonumber(item.contribution or item.beitrag or item.premium)
 
   local specificAttrs = item.specificAttributes or item.details or {}
   local deathSum = specificAttrs.deathInsuredSum or specificAttrs.todesfallsumme
   local lifeSum = specificAttrs.lifeInsuredSum or specificAttrs.erlebensfallsumme
   local endOfPayment = specificAttrs.endOfPayment or specificAttrs.beitragszahlungsende
+
+  local normalizedAttributes = {
+    deathInsuredSum = normalizeAttributeValue(deathSum),
+    lifeInsuredSum = normalizeAttributeValue(lifeSum),
+    endOfPayment = normalizeAttributeValue(endOfPayment)
+  }
+  if contribution then
+    normalizedAttributes.netContribution = {
+      value = contribution,
+      displayValue = formatCurrency(contribution)
+    }
+  end
 
   return {
     id = item.id or contractNumber,
@@ -1442,17 +1472,12 @@ function mapApiContractToInternal(item)
     contribution = contribution,
     validFrom = item.validFrom or item.beginn,
     validUntil = item.validUntil or item.ende,
-    state = item.state or item.status or "aktiv",
+    state = item.state or item.status,
     tariff = item.tariff or item.tarif,
     contractType = contractType,
     shareValue = shareValue,
-    currency = item.currency or "EUR",
-    specificAttributes = {
-      deathInsuredSum = normalizeAttributeValue(deathSum),
-      lifeInsuredSum = normalizeAttributeValue(lifeSum),
-      endOfPayment = normalizeAttributeValue(endOfPayment),
-      netContribution = { value = contribution, displayValue = formatCurrency(contribution) }
-    }
+    currency = item.currency,
+    specificAttributes = normalizedAttributes
   }
 end
 
@@ -1480,8 +1505,20 @@ function ListAccounts(knownAccounts)
 end
 
 function createAccountFromContract(contract)
-  local companyName = contract.company.shortName or "Unbekannt"
-  local contractNumber = contract.number or ""
+  if type(contract.company) ~= "table"
+      or type(contract.company.shortName) ~= "string"
+      or contract.company.shortName == "" then
+    error("MLP Versicherungen: Versicherer fehlt in den Vertragsdaten.")
+  end
+  if type(contract.currency) ~= "string" or contract.currency == "" then
+    error("MLP Versicherungen: Währung fehlt in den Vertragsdaten.")
+  end
+  local accountNumber = contract.number or contract.id
+  if type(accountNumber) ~= "string" or accountNumber == "" then
+    error("MLP Versicherungen: Vertragsnummer fehlt in den Vertragsdaten.")
+  end
+  local companyName = contract.company.shortName
+  local contractNumber = contract.number or accountNumber
   local tariff = contract.tariff or ""
   local endDate = ""
   if contract.specificAttributes and contract.specificAttributes.endOfPayment then
@@ -1495,20 +1532,31 @@ function createAccountFromContract(contract)
 
   return {
     name = displayName,
-    accountNumber = contract.number or contract.id,
+    accountNumber = accountNumber,
     portfolio = true,
-    currency = contract.currency or "EUR",
+    currency = contract.currency,
     type = AccountTypePortfolio,
-    bankCode = contract.company.shortName or "MLP"
+    bankCode = contract.company.shortName
   }
 end
 
 function RefreshAccount(account, since)
+  if not account or not account.accountNumber then
+    error("MLP Versicherungen: Kontoabruf ohne Kontonummer nicht möglich.")
+  end
   local contract = findContractByNumber(account.accountNumber)
-  if not contract then return "Vertrag nicht gefunden." end
+  if not contract then
+    error("MLP Versicherungen: Kontoabruf für unbekannten Vertrag nicht möglich.")
+  end
 
-  local shareValue = contract.shareValue or 0
-  local currency = contract.currency or "EUR"
+  local shareValue = tonumber(contract.shareValue)
+  if not shareValue then
+    error("MLP Versicherungen: Vertragswert fehlt oder ist ungültig.")
+  end
+  local currency = contract.currency
+  if type(currency) ~= "string" or currency == "" then
+    error("MLP Versicherungen: Vertragswährung fehlt.")
+  end
   local security = {
     name = buildSecurityName(contract),
     isin = "",
@@ -1565,9 +1613,9 @@ function getContractTypeName(contractType)
 end
 
 function calculateTotalContributions(contract)
-  if not contract.contribution or contract.contribution <= 0 then return 0 end
+  if not contract.contribution or contract.contribution <= 0 then return nil end
   local day, month, year = parseIsoDate(contract.validFrom)
-  if not year then return 0 end
+  if not year then return nil end
   local currentDate = os.date("*t")
   local monthsElapsed = (currentDate.year - year) * 12 + (currentDate.month - month)
   return contract.contribution * math.max(0, monthsElapsed)

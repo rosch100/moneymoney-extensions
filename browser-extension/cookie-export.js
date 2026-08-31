@@ -26,7 +26,8 @@
 export function detectBank(hostname, banks) {
   const host = hostname.replace(/^www\./, '');
   for (const bank of Object.values(banks)) {
-    if (bank.matchHost.test(host)) {
+    const originHosts = bank.origins.map((origin) => new URL(origin).hostname);
+    if (originHosts.includes(hostname) && bank.matchHost.test(host)) {
       return bank;
     }
   }
@@ -177,22 +178,18 @@ export async function collectCookies(api, bank) {
   async function addFromOrigin(origin) {
     const url = `${origin}/`;
     const hostname = new URL(origin).hostname;
-    let gotAny = false;
     let queryFailed = false;
 
     for (const details of [{ url }, { domain: hostname }]) {
       try {
         const list = await api.cookies.getAll(details);
-        if (list.length > 0) {
-          gotAny = true;
-        }
         mergeList(list);
       } catch {
         queryFailed = true;
       }
     }
 
-    if (queryFailed && !gotAny) {
+    if (queryFailed) {
       failedOrigins.push(origin);
     }
   }

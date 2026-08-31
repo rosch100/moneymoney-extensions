@@ -214,4 +214,284 @@ if #authFailures > 0 then
   error("Auth error classification failed: " .. table.concat(authFailures, ", "))
 end
 
+local parsedTransactions = parseTransactionsFromPage([[
+<tbody class="trans-tbody-wrap">
+<tr>
+  <td class="trans-date-cell">08/31/2026</td>
+  <td class="trans-desc-cell"><span>Test transaction</span></td>
+  <td class="trans-amount-cell">$12.34</td>
+  <td><span class="icon-type-purchase"></span></td>
+</tr>
+</tbody>
+]], nil, nil, nil)
+local transaction = parsedTransactions[1]
+assertTrue(transaction ~= nil, "parseTransactionRow.contract")
+if not transaction then
+  error("parseTransactionRow returned nil")
+end
+assertEq(transaction.valueDate, transaction.bookingDate, "parseTransactionRow.valueDate")
+assertEq(transaction.valutaDate, nil, "parseTransactionRow.noValutaDate")
+
+local pendingTransactions = parseTransactionsFromPage([[
+<tbody class="trans-tbody-wrap">
+<tr>
+  <td class="trans-date-cell">Pending</td>
+  <td class="trans-desc-cell"><span>Pending transaction</span></td>
+  <td class="trans-amount-cell">$12.34</td>
+  <td><span class="icon-type-purchase"></span></td>
+</tr>
+</tbody>
+]], nil, nil, nil)
+assertEq(pendingTransactions[1].booked, false, "parseTransactionRow.pendingNotBooked")
+
+local missingDateOk, missingDateError = pcall(parseTransactionsFromPage, [[
+<tbody class="trans-tbody-wrap">
+<tr>
+  <td class="trans-desc-cell"><span>Missing date</span></td>
+  <td class="trans-amount-cell">$12.34</td>
+  <td><span class="icon-type-purchase"></span></td>
+</tr>
+</tbody>
+]], nil, nil, nil)
+assertEq(missingDateOk, false, "parseTransactionRow.rejectsMissingDate")
+assertTrue(
+  type(missingDateError) == "string"
+    and missingDateError:find("Umsatzdatum", 1, true) ~= nil,
+  "parseTransactionRow.missingDateMessage")
+
+local invalidAmountOk, invalidAmountError = pcall(parseTransactionsFromPage, [[
+<tbody class="trans-tbody-wrap">
+<tr>
+  <td class="trans-date-cell">08/31/2026</td>
+  <td class="trans-desc-cell"><span>Invalid amount</span></td>
+  <td class="trans-amount-cell">$..</td>
+  <td><span class="icon-type-purchase"></span></td>
+</tr>
+</tbody>
+]], nil, nil, nil)
+assertEq(invalidAmountOk, false, "parseTransactionRow.rejectsInvalidAmount")
+assertTrue(
+  type(invalidAmountError) == "string"
+    and invalidAmountError:find("Umsatzbetrag", 1, true) ~= nil,
+  "parseTransactionRow.invalidAmountMessage")
+
+Connection = function()
+  return {
+    request = function()
+      return "<html><body>Account Overview</body></html>"
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+assertEq(
+  InitializeSession2(
+    ProtocolWebBanking,
+    "Bank of America",
+    1,
+    {"account-discovery", "COOKIE:SMSESSION=value"},
+    true),
+  nil,
+  "ListAccounts.setup")
+local undiscoveredAccounts = ListAccounts({})
+assertEq(type(undiscoveredAccounts), "string", "ListAccounts.noDummyAccount")
+
+Connection = function()
+  return {
+    request = function()
+      return '<html><body><a href="/card/">Credit Card Ending in 1234</a></body></html>'
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+assertEq(
+  InitializeSession2(
+    ProtocolWebBanking,
+    "Bank of America",
+    1,
+    {"credit-card-discovery", "COOKIE:SMSESSION=value"},
+    true),
+  nil,
+  "ListAccounts.creditCardSetup")
+local fallbackCreditCards = ListAccounts({})
+assertEq(fallbackCreditCards[1].type, AccountTypeCreditCard, "ListAccounts.fallbackCreditCardType")
+
+Connection = function()
+  return {
+    request = function()
+      return '<div class="checking-account">Checking Account <span>Ending in 4321</span></div>'
+        .. '<div class="promotion">Apply for a Credit Card today</div>'
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"checking-discovery", "COOKIE:SMSESSION=value"},
+  true)
+local scopedChecking = ListAccounts({})
+assertEq(scopedChecking[1].type, AccountTypeGiro, "ListAccounts.scopesFallbackType")
+
+Connection = function()
+  return {
+    request = function()
+      return nil
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"refresh-failure", "COOKIE:SMSESSION=value"},
+  true)
+local refreshOk, refreshError = pcall(RefreshAccount, {accountNumber = "1234"}, nil)
+assertEq(refreshOk, false, "RefreshAccount.propagatesFailure")
+assertTrue(
+  type(refreshError) == "string" and refreshError:match("abruf") ~= nil,
+  "RefreshAccount.failureMessage")
+
+Connection = function()
+  return {
+    request = function()
+      return "<p>The information you entered doesn't match our records.</p>",
+        nil,
+        nil,
+        nil,
+        {}
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"credential-rejection", "COOKIE:SMSESSION=value"},
+  true)
+local _, credentialError = postSignOnCredentials("user", "wrong", "csrf-token")
+assertEq(credentialError, LoginFailed, "postSignOnCredentials.rejectedCredentials")
+
+Connection = function()
+  return {
+    request = function()
+      return "<html><body>Account Overview</body></html>"
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"missing-balance", "COOKIE:SMSESSION=value"},
+  true)
+local missingBalanceOk, missingBalanceError = pcall(
+  RefreshAccount,
+  {accountNumber = "1234", type = AccountTypeGiro},
+  nil)
+assertEq(missingBalanceOk, false, "RefreshAccount.rejectsMissingBalance")
+assertTrue(
+  type(missingBalanceError) == "string"
+    and missingBalanceError:match("Kontostand") ~= nil,
+  "RefreshAccount.missingBalanceMessage")
+
+Connection = function()
+  return {
+    request = function()
+      return '<html><body>Sign In Statement Balance:<span class="TL_NPI_L1">$42.00</span></body></html>'
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"login-page-balance", "COOKIE:SMSESSION=value"},
+  true)
+local loginPageOk, loginPageError = pcall(
+  RefreshAccount,
+  {accountNumber = "1234", type = AccountTypeGiro},
+  nil)
+assertEq(loginPageOk, false, "RefreshAccount.rejectsLoginPage")
+assertTrue(
+  type(loginPageError) == "string"
+    and loginPageError:match("authentifiziert") ~= nil,
+  "RefreshAccount.loginPageMessage")
+
+local statementPayload =
+  [[{"documentList":[{"docId":"missing-name","date":"2026-08-31"}]}]]
+Connection = function()
+  return {
+    request = function(_, _, url)
+      if url and url:find("gatherDocuments", 1, true) then
+        return statementPayload
+      end
+      return "<html><body>Account Overview</body></html>"
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+assertEq(
+  InitializeSession2(
+    ProtocolWebBanking,
+    "Bank of America",
+    1,
+    {"statement-date", "COOKIE:SMSESSION=value"},
+    true),
+  nil,
+  "GetAvailableStatements.setup")
+local incompleteStatementOk, incompleteStatementError = pcall(
+  fetchStatementDocuments,
+  "adx-token",
+  nil)
+assertEq(incompleteStatementOk, false, "GetAvailableStatements.rejectsIncompleteDocument")
+assertTrue(
+  type(incompleteStatementError) == "string"
+    and incompleteStatementError:find("unvollständig", 1, true) ~= nil,
+  "GetAvailableStatements.incompleteDocumentMessage")
+
+statementPayload =
+  [[{"documentList":[{"docId":"invalid-date","docDisplayName":"Statement","date":"invalid"}]}]]
+local invalidStatementDateOk, invalidStatementDateError = pcall(
+  fetchStatementDocuments,
+  "adx-token",
+  nil)
+assertEq(invalidStatementDateOk, false, "GetAvailableStatements.rejectsInvalidDate")
+assertTrue(
+  type(invalidStatementDateError) == "string"
+    and invalidStatementDateError:find("Auszugsdatum", 1, true) ~= nil,
+  "GetAvailableStatements.invalidDateMessage")
+
+statementPayload =
+  [[{"documentList":[{"docId":"invalid-calendar","docDisplayName":"Statement","date":"2026-02-31"}]}]]
+local invalidCalendarDateOk = pcall(fetchStatementDocuments, "adx-token", nil)
+assertEq(invalidCalendarDateOk, false, "GetAvailableStatements.rejectsInvalidCalendarDate")
+
+statementPayload = [[{"documents":[
+  {"docId":"statement-1","docDisplayName":"January","date":"2026-01-31"},
+  {"docId":"statement-2","docDisplayName":"February","date":"2026-02-28"}
+]}]]
+local nestedDocuments = fetchStatementDocuments("adx-token", nil)
+assertEq(#nestedDocuments, 2, "GetAvailableStatements.parsesAllNestedDocuments")
+
 print("All BoA login helper tests passed.")

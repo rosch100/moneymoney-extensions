@@ -1,3 +1,4 @@
+---@diagnostic disable: duplicate-set-field -- Testfälle überschreiben Connection-Mocks absichtlich.
 -- Lokaler Funktions-Test der Shareview-Parser gegen die echten HAR-Daten.
 -- Lädt die Extension nicht über die WebBanking-Engine, sondern stubbt
 -- die nötigen Globals und prüft Parser-Ausgaben.
@@ -183,6 +184,16 @@ do
   assertEq(#secs2, 1, "parseHoldings.count.invalid-isin")
   assertEq(secs2[1].name, "Example Position", "parseHoldingRow.htmlDecode.name")
   assertEq(secs2[1].isin, "", "parseHoldingRow.invalid-isin=empty")
+
+  local incomplete, incompleteCount = parseHoldings([[
+<table>
+  <tr class="summaryDataItemRow">
+    <td headers="holding"><strong>Incomplete Position</strong></td>
+  </tr>
+</table>
+]])
+  assertEq(#incomplete, 0, "parseHoldings.incompletePositionOmitted")
+  assertEq(incompleteCount, 1, "parseHoldings.incompletePositionReported")
 end
 
 -- extractLoginError / isLoggedInPage / isMfaPage
@@ -217,6 +228,179 @@ do
   assertEq(isMfaPage("Bitte authentication code eingeben"), true, "isMfaPage.authentication-code")
   assertEq(isMfaPage(nil), false, "isMfaPage.nil=false")
 end
+
+assertEq(type(isCredentialRejectionMessage), "function",
+  "isCredentialRejectionMessage.available")
+assertEq(
+  isCredentialRejectionMessage("The username or password entered is incorrect."),
+  true,
+  "isCredentialRejectionMessage.password")
+assertEq(
+  isCredentialRejectionMessage("The service is temporarily unavailable."),
+  false,
+  "isCredentialRejectionMessage.technical")
+
+local firstConnection = {
+  language = "",
+  useragent = "",
+  get = function() return nil end,
+}
+Connection = function()
+  return firstConnection
+end
+LocalStorage = {}
+local dobChallenge = InitializeSession2(
+  ProtocolWebBanking,
+  "Shareview",
+  1,
+  {"restore-user", "password"},
+  true)
+assertEq(type(dobChallenge), "table", "InitializeSession2.dobChallenge")
+local restoredConnection = {
+  language = "",
+  useragent = "",
+  get = function() return nil end,
+}
+LocalStorage.connection = restoredConnection
+LocalStorage.connectionAccountKey = "restore-user"
+InitializeSession2(
+  ProtocolWebBanking,
+  "Shareview",
+  2,
+  {"invalid-date"},
+  true)
+assertEq(restoredConnection.language, "en-GB",
+  "InitializeSession2.restoresConnectionForStep2")
+local refreshOk, refreshError = pcall(
+  RefreshAccount,
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(refreshOk, false, "RefreshAccount.propagatesFailure")
+assertEq(
+  type(refreshError) == "string"
+    and refreshError:find("Kontoabruf", 1, true) ~= nil,
+  true,
+  "RefreshAccount.failureMessage")
+restoredConnection.get = function()
+  return "<html><body>Sign in</body></html>"
+end
+local unauthenticatedOk, unauthenticatedError = pcall(
+  RefreshAccount,
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(unauthenticatedOk, false, "RefreshAccount.rejectsUnauthenticatedPage")
+assertEq(
+  type(unauthenticatedError) == "string"
+    and unauthenticatedError:find("nicht authentifiziert", 1, true) ~= nil,
+  true,
+  "RefreshAccount.unauthenticatedMessage")
+restoredConnection.get = function()
+  return [[
+<html><body>
+  <div id="TotalIndicativeValue"><span class="currencyChange">GBP|100.00||0|.|,|</span></div>
+  <table>
+    <tr class="summaryDataItemRow">
+      <td headers="holding"><strong>Incomplete Position</strong></td>
+    </tr>
+  </table>
+</body></html>
+]]
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Shareview",
+  1,
+  {"restore-user", "password"},
+  true)
+local incompletePortfolioOk, incompletePortfolioError = pcall(
+  RefreshAccount,
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(incompletePortfolioOk, false, "RefreshAccount.rejectsIncompletePortfolio")
+assertEq(
+  type(incompletePortfolioError) == "string"
+    and incompletePortfolioError:find("Portfoliodaten", 1, true) ~= nil,
+  true,
+  "RefreshAccount.incompletePortfolioMessage")
+
+local missingTotalHtml = [[
+<html><body>
+  <h1>My Holdings Summary</h1>
+  <table>
+    <tr class="summaryDataItemRow" id="row1">
+      <td headers="holding"><strong>Example Corp</strong><br/>Shareholder Ref No:1234567890</td>
+      <td headers="quantity"><bdo>100</bdo></td>
+      <td headers="price"><span class="original">GBX|1000.0000|99|1|.|,|6</span></td>
+      <td headers="value"><span class="original">GBP|1000.00000000||0|.|,|</span></td>
+      externalid=GB0000000001
+    </tr>
+  </table>
+</body></html>
+]]
+local missingTotalSecurities, missingTotalIncomplete = parseHoldings(missingTotalHtml)
+assertEq(#missingTotalSecurities, 1, "RefreshAccount.missingTotalFixturePosition")
+assertEq(missingTotalIncomplete, 0, "RefreshAccount.missingTotalFixtureComplete")
+restoredConnection.get = function()
+  return missingTotalHtml
+end
+local missingTotalPortfolio = RefreshAccount(
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(missingTotalPortfolio.balance, nil, "RefreshAccount.omitsMissingOptionalTotal")
+assertEq(#missingTotalPortfolio.securities, 1, "RefreshAccount.keepsCompletePositionsWithoutTotal")
+
+restoredConnection.get = function()
+  return '<html><body><div id="TotalIndicativeValue"><span>GBP|100.00||0|.|,|</span></div></body></html>'
+end
+local missingHoldingsMarkupOk, missingHoldingsMarkupError = pcall(
+  RefreshAccount,
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(missingHoldingsMarkupOk, false, "RefreshAccount.rejectsMissingHoldingsMarkup")
+assertEq(
+  type(missingHoldingsMarkupError) == "string"
+    and missingHoldingsMarkupError:find("Positionsbereich", 1, true) ~= nil,
+  true,
+  "RefreshAccount.missingHoldingsMarkupMessage")
+
+local function holdingsPage(balance)
+  return '<html><body><h1>My Holdings Summary</h1>'
+    .. '<div id="TotalIndicativeValue"><span>GBP|'
+    .. tostring(balance)
+    .. '||0|.|,|</span></div>'
+    .. '<table><tr class="summaryDataItemRow">'
+    .. '<td headers="holding"><strong>Example Corp</strong><br/>Shareholder Ref No:1234567890</td>'
+    .. '<td headers="quantity"><bdo>1</bdo></td>'
+    .. '<td headers="price"><span class="original">GBP|' .. tostring(balance) .. '||0|.|,|</span></td>'
+    .. '<td headers="value"><span class="original">GBP|' .. tostring(balance) .. '||0|.|,|</span></td>'
+    .. 'externalid=GB0000000001</tr></table></body></html>'
+end
+
+restoredConnection.get = function()
+  return holdingsPage("100.00")
+end
+InitializeSession2(
+  ProtocolWebBanking,
+  "Shareview",
+  1,
+  {"restore-user", "password"},
+  true)
+
+local invalidAccountOk, invalidAccountError = pcall(RefreshAccount, nil, nil)
+assertEq(invalidAccountOk, false, "RefreshAccount.rejectsInvalidAccount")
+assertEq(
+  type(invalidAccountError) == "string"
+    and invalidAccountError:find("Kontoabruf", 1, true) ~= nil,
+  true,
+  "RefreshAccount.invalidAccountMessage")
+
+restoredConnection.get = function()
+  return holdingsPage("200.00")
+end
+local freshPortfolio = RefreshAccount(
+  {accountNumber = "shareview-portfolio"},
+  nil)
+assertEq(freshPortfolio.balance, 200, "RefreshAccount.fetchesFreshHoldings")
 
 EndSession()
 local authFailures = {}

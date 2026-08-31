@@ -14,11 +14,20 @@ WebBanking{
 }
 
 local CONSTANTS = {
+  accountNumber = "shareview-portfolio",
   baseUrl     = "https://portfolio.shareview.co.uk",
   loginUrl    = "https://portfolio.shareview.co.uk/7/Portfolio/default/en/anonymous/Pages/Login.aspx",
   holdingsUrl = "https://portfolio.shareview.co.uk/7/portfolio/default/en/Active/Pages/holdingssummary.aspx",
   logoutUrl   = "https://portfolio.shareview.co.uk/7/Auth/Logoff.aspx",
   userAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+}
+
+local CREDENTIAL_REJECTION_MARKERS = {
+  "username or password",
+  "user id or password",
+  "incorrect password",
+  "invalid credentials",
+  "details you have entered are incorrect",
 }
 
 local connection
@@ -83,7 +92,7 @@ end
 
 local function normalizeCurrency(c)
   if c == "GBX" or c == "GBp" then return "GBP" end
-  if not c or c == "" then return "GBP" end
+  if not c or c == "" then return nil end
   return c
 end
 
@@ -107,25 +116,31 @@ function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Shareview"
 end
 
+local function restoreShareviewConnection(accountKey)
+  local storage = rawget(_G, "LocalStorage")
+  local canReuse = storage
+    and storage.connection
+    and storage.connectionAccountKey == accountKey
+  if canReuse then
+    connection = storage.connection
+    session.persistedConnection = true
+  else
+    connection = Connection()
+    if storage then
+      storage.connection = connection
+      storage.connectionAccountKey = accountKey
+      session.persistedConnection = true
+    end
+  end
+  connection.language = "en-GB"
+  connection.useragent = CONSTANTS.userAgent
+end
+
 function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   if step == 1 then
-    local storage = rawget(_G, "LocalStorage")
-    local rawUsername = credentials and credentials[1] or ""
-    local accountKey = rawUsername or ""
-    local canReuse = storage and storage.connection and storage.connectionAccountKey == accountKey
-    if canReuse then
-      connection = storage.connection
-      session.persistedConnection = true
-    else
-      connection = Connection()
-      if storage then
-        storage.connection = connection
-        storage.connectionAccountKey = accountKey
-        session.persistedConnection = true
-      end
-    end
-    connection.language = "en-GB"
-    connection.useragent = CONSTANTS.userAgent
+    local accountKey = credentials and credentials[1] or ""
+    session.accountKey = accountKey
+    restoreShareviewConnection(accountKey)
 
     local holdings = connection:get(CONSTANTS.holdingsUrl)
     if holdings and holdings ~= "" and isLoggedInPage(holdings) then
@@ -134,6 +149,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     end
     return loginStep1(credentials, interactive)
   end
+  restoreShareviewConnection(session.accountKey or "")
   if session.awaitingDob then return submitDobAndLogin(credentials[1]) end
   if session.awaitingMfa then return submitMfaCode(credentials) end
   return "Anmeldesitzung abgelaufen. Bitte erneut anmelden."
@@ -216,7 +232,12 @@ function submitCredentials(username, password, day, month, year)
   end
 
   local loginError = extractLoginError(HTML(mfaContent))
-  if loginError then return "Login fehlgeschlagen: " .. loginError end
+  if loginError then
+    if isCredentialRejectionMessage(loginError) then
+      return LoginFailed
+    end
+    return "Login fehlgeschlagen: " .. loginError
+  end
   if not isMfaPage(mfaContent) then
     return "Login fehlgeschlagen: Unerwartete Antwort. Bitte Zugangsdaten und Geburtsdatum prüfen."
   end
@@ -351,6 +372,19 @@ function extractLoginError(htmlNode)
   return nil
 end
 
+function isCredentialRejectionMessage(message)
+  if type(message) ~= "string" then
+    return false
+  end
+  local normalized = message:lower()
+  for _, marker in ipairs(CREDENTIAL_REJECTION_MARKERS) do
+    if normalized:find(marker, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
 function ListAccounts(knownAccounts)
   if not session.holdingsHtmlString then
     session.holdingsHtmlString = connection:get(CONSTANTS.holdingsUrl)
@@ -361,7 +395,7 @@ function ListAccounts(knownAccounts)
   return {
     {
       name          = "Shareview Portfolio",
-      accountNumber = "shareview-portfolio",
+      accountNumber = CONSTANTS.accountNumber,
       portfolio     = true,
       currency      = "GBP",
       type          = AccountTypePortfolio,
@@ -371,23 +405,36 @@ function ListAccounts(knownAccounts)
 end
 
 function RefreshAccount(account, since)
-  if not session.holdingsHtmlString then
-    session.holdingsHtmlString = connection:get(CONSTANTS.holdingsUrl)
-  end
-  if not session.holdingsHtmlString then
-    return "Holdings-Seite nicht erreichbar."
+  if not account or account.accountNumber ~= CONSTANTS.accountNumber then
+    error("Shareview: Kontoabruf für unbekanntes Konto nicht möglich.")
   end
 
-  local html = session.holdingsHtmlString
-  local securities = parseHoldings(html)
-  local balance, balanceCurrency = parseTotalIndicativeValue(html)
-
-  if not balance or balance == 0 then
-    balance = 0
-    for _, sec in ipairs(securities) do balance = balance + (sec.amount or 0) end
-    balanceCurrency = balanceCurrency or "GBP"
+  local html = connection:get(CONSTANTS.holdingsUrl)
+  if not html then
+    error("Shareview: Kontoabruf fehlgeschlagen, Holdings-Seite nicht erreichbar.")
   end
-  return { balance = balance, securities = securities }
+  session.holdingsHtmlString = html
+  if not isLoggedInPage(html) then
+    error("Shareview: Kontoabruf fehlgeschlagen, Holdings-Seite ist nicht authentifiziert.")
+  end
+  if not html:find("summaryDataItemRow", 1, true) then
+    error("Shareview: Positionsbereich fehlt in der Serverantwort.")
+  end
+
+  local securities, incompletePositions = parseHoldings(html)
+  if incompletePositions > 0 then
+    error("Shareview: Kontoabruf enthält unvollständige Portfoliodaten.")
+  end
+  local balance = parseTotalIndicativeValue(html)
+  if balance == nil and #securities == 0 then
+    error("Shareview: Kontoabruf lieferte keine vollständigen Portfoliodaten.")
+  end
+
+  local portfolio = { securities = securities }
+  if balance ~= nil then
+    portfolio.balance = balance
+  end
+  return portfolio
 end
 
 function parseTotalIndicativeValue(htmlString)
@@ -401,12 +448,17 @@ end
 
 function parseHoldings(htmlString)
   local securities = {}
-  if not htmlString then return securities end
+  local incompletePositions = 0
+  if not htmlString then return securities, incompletePositions end
   for row in htmlString:gmatch('<tr[^>]*summaryDataItemRow[^>]*>(.-)</tr>') do
     local sec = parseHoldingRow(row)
-    if sec then securities[#securities + 1] = sec end
+    if sec then
+      securities[#securities + 1] = sec
+    else
+      incompletePositions = incompletePositions + 1
+    end
   end
-  return securities
+  return securities, incompletePositions
 end
 
 local function extractIsin(row)
@@ -443,7 +495,8 @@ function parseHoldingRow(row)
 
   local quantityCell = row:match('headers="quantity"[^>]*>(.-)</td>') or ""
   local quantityStr  = (quantityCell:match('<bdo[^>]*>%s*([%d%.,]+)%s*</bdo>') or stripTags(quantityCell) or ""):gsub(",", "")
-  local quantity     = tonumber(quantityStr) or 0
+  local quantity     = tonumber(quantityStr)
+  if quantity == nil then return nil end
 
   local priceCell = row:match('headers="price"[^>]*>(.-)</td>')
   local pricePerShare, priceNative = parseCurrencyValue(extractCurrencyCell(priceCell))
@@ -454,16 +507,25 @@ function parseHoldingRow(row)
   if not amount and pricePerShare and quantity > 0 then
     amount = pricePerShare * quantity
   end
+  if not pricePerShare and amount and quantity > 0 then
+    pricePerShare = amount / quantity
+    priceNative = valueNative
+  end
+  local priceCurrency = normalizeCurrency(priceNative)
+  local amountCurrency = normalizeCurrency(valueNative or priceNative)
+  if not pricePerShare or not amount or not priceCurrency or not amountCurrency then
+    return nil
+  end
 
   return {
     name                     = fullName,
     isin                     = extractIsin(row),
     securityNumber           = shareholderRef,
     quantity                 = quantity,
-    price                    = pricePerShare or 0,
-    currencyOfPrice          = normalizeCurrency(priceNative),
-    amount                   = amount or 0,
-    currencyOfOriginalAmount = normalizeCurrency(valueNative)
+    price                    = pricePerShare,
+    currencyOfPrice          = priceCurrency,
+    amount                   = amount,
+    currencyOfOriginalAmount = amountCurrency
   }
 end
 

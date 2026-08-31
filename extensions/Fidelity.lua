@@ -1,5 +1,5 @@
 --
--- Fidelity Investments — MoneyMoney Web Banking Extension (Beta 0.9, Cookie-Import)
+-- Fidelity Investments — MoneyMoney Web Banking Extension (Beta 0.91, Cookie-Import)
 -- https://www.fidelity.com
 -- Dokumentation: docs/LUA-EXTENSIONS.md
 -- API: https://moneymoney.app/api/webbanking/
@@ -389,9 +389,157 @@ function ListAccounts(knownAccounts)
   return accounts
 end
 
+local function resolveSecurityPrice(price, quantity, marketValue)
+  local resolved = tonumber(price)
+  if resolved == nil and quantity and quantity > 0 and marketValue then
+    resolved = marketValue / quantity
+  end
+  return resolved
+end
+
+local function buildSecurity(fields)
+  if type(fields.name) ~= "string" or fields.name == ""
+      or type(fields.symbol) ~= "string" or fields.symbol == ""
+      or fields.quantity == nil or fields.price == nil or fields.marketValue == nil then
+    return nil
+  end
+
+  local securityNumber = fields.cusip
+  if type(securityNumber) ~= "string" or securityNumber == "" then
+    securityNumber = fields.symbol
+  end
+
+  local security = {
+    name = fields.name,
+    securityNumber = securityNumber,
+    quantity = fields.quantity,
+    price = fields.price,
+    amount = fields.marketValue,
+    currencyOfPrice = "USD",
+    currencyOfOriginalAmount = "USD"
+  }
+  if fields.purchasePrice ~= nil then
+    security.purchasePrice = fields.purchasePrice
+  end
+  return security
+end
+
+local function buildGraphqlPortfolio(data)
+  local positionData = data.data.getPosition
+  local priceLookup = {}
+  for _, position in ipairs(positionData.topBottomPositions or {}) do
+    local lastPrice = tonumber(position.lastPrice)
+    if position.symbol and lastPrice then
+      priceLookup[position.symbol] = lastPrice
+    end
+  end
+
+  local accountDetails = positionData.position
+    and positionData.position.acctDetails
+    and positionData.position.acctDetails.acctDetail
+  if type(accountDetails) ~= "table" then
+    return nil
+  end
+
+  local securities = {}
+  local totalBalance = 0
+  for _, accountDetail in ipairs(accountDetails) do
+    local positions = accountDetail.positionDetails
+      and accountDetail.positionDetails.positionDetail
+    if type(positions) ~= "table" then
+      return nil
+    end
+
+    for _, position in ipairs(positions) do
+      local symbol = position.symbol
+      local quantity = tonumber(position.quantity)
+      local marketValue = position.marketValDetail
+        and tonumber(position.marketValDetail.marketVal)
+      local totalGainLoss = position.marketValDetail
+        and tonumber(position.marketValDetail.totalGainLoss)
+      local purchasePrice = totalGainLoss and quantity and quantity > 0 and marketValue
+        and (marketValue - totalGainLoss) / quantity
+        or nil
+      local security = buildSecurity({
+        name = position.securityDescription,
+        symbol = symbol,
+        cusip = position.cusip,
+        quantity = quantity,
+        price = resolveSecurityPrice(
+          symbol and priceLookup[symbol] or nil,
+          quantity,
+          marketValue),
+        marketValue = marketValue,
+        purchasePrice = purchasePrice
+      })
+      if not security then
+        return nil
+      end
+      table.insert(securities, security)
+      totalBalance = totalBalance + marketValue
+    end
+  end
+
+  if #securities == 0 then
+    return nil
+  end
+  return { balance = totalBalance, securities = securities }
+end
+
+local function buildRestPortfolio(data)
+  local payload = data
+  if type(data.assetAllocation) == "table" then
+    payload = data.assetAllocation
+  end
+
+  local holdings = payload.holdingsDetails
+  if not holdings and payload.aggregateStyleDetail then
+    holdings = payload.aggregateStyleDetail.holdingDetails
+  end
+
+  local totalBalance = tonumber(payload.overallMarketValue)
+  if totalBalance == nil and type(holdings) == "table" then
+    totalBalance = 0
+    for _, holding in ipairs(holdings) do
+      local marketValue = tonumber(holding.marketValue)
+      if marketValue == nil then
+        error("Fidelity: Marktwert einer Position fehlt oder ist ungültig.")
+      end
+      totalBalance = totalBalance + marketValue
+    end
+  end
+  if totalBalance == nil then
+    error("Fidelity: Kontostand fehlt in der Serverantwort.")
+  end
+  if type(holdings) ~= "table" then
+    error("Fidelity: Positionen fehlen in der Serverantwort oder haben ein ungültiges Format.")
+  end
+
+  local securities = {}
+  for _, holding in ipairs(holdings) do
+    local symbol = holding.symbol
+    local quantity = tonumber(holding.quantity)
+    local marketValue = tonumber(holding.marketValue)
+    local security = buildSecurity({
+      name = holding.longName or holding.name or symbol,
+      symbol = symbol,
+      cusip = holding.cusip,
+      quantity = quantity,
+      price = resolveSecurityPrice(holding.price, quantity, marketValue),
+      marketValue = marketValue
+    })
+    if not security then
+      error("Fidelity: Serverantwort enthält mindestens eine unvollständige Position.")
+    end
+    table.insert(securities, security)
+  end
+
+  return { balance = totalBalance, securities = securities }
+end
+
 function RefreshAccount(account, since)
   if not account or not account.accountNumber then
-    return { balance = 0, securities = {} }
+    error("Fidelity: Kontoabruf ohne Kontonummer nicht möglich.")
   end
 
   MM.printStatus("Refreshing account: " .. account.name)
@@ -492,62 +640,10 @@ function RefreshAccount(account, since)
 
   local localData = fetchGraphqlPositions()
   if localData then
-    local securities = {}
-    local totalBalance = 0
-    local priceLookup = {}
-
-    if localData.data.getPosition.topBottomPositions then
-      for _, pos in ipairs(localData.data.getPosition.topBottomPositions) do
-        if pos.symbol and pos.lastPrice then
-          priceLookup[pos.symbol] = tonumber(pos.lastPrice) or 0
-        end
-      end
+    local graphqlPortfolio = buildGraphqlPortfolio(localData)
+    if graphqlPortfolio then
+      return graphqlPortfolio
     end
-
-    if localData.data.getPosition.position and localData.data.getPosition.position.acctDetails and localData.data.getPosition.position.acctDetails.acctDetail then
-      for _, acct in ipairs(localData.data.getPosition.position.acctDetails.acctDetail) do
-        if acct.positionDetails and acct.positionDetails.positionDetail then
-          for _, pos in ipairs(acct.positionDetails.positionDetail) do
-            local symbol = pos.symbol or ""
-            local quantity = tonumber(pos.quantity) or 0
-            local marketVal = 0
-            local totalGainLoss = 0
-
-            if pos.marketValDetail then
-              marketVal = tonumber(pos.marketValDetail.marketVal) or 0
-              totalGainLoss = tonumber(pos.marketValDetail.totalGainLoss) or 0
-            end
-
-            local currentPrice = priceLookup[symbol] or 0
-            if currentPrice == 0 and quantity > 0 then
-              currentPrice = marketVal / quantity
-            end
-
-            local purchasePrice = 0
-            if quantity > 0 and marketVal > 0 then
-              local costBasis = marketVal - totalGainLoss
-              purchasePrice = costBasis / quantity
-            end
-
-            table.insert(securities, {
-              name = pos.securityDescription or symbol or "Unknown",
-              isin = pos.cusip or "",
-              securityNumber = symbol,
-              quantity = quantity,
-              price = currentPrice,
-              purchasePrice = purchasePrice,
-              amount = marketVal,
-              currencyOfPrice = "USD",
-              currencyOfOriginalAmount = "USD"
-            })
-
-            totalBalance = totalBalance + marketVal
-          end
-        end
-      end
-    end
-
-    return { balance = totalBalance, securities = securities }
   end
 
   -- REST-Fallback: asset-allocation liefert mindestens Marktwerte (Balance).
@@ -626,72 +722,19 @@ function RefreshAccount(account, since)
   local response, mimeType = fetchAssetAllocationWithCsrf(csrfTokenPreferred)
 
   if not response or type(response) ~= "string" then
-    return { balance = 0, securities = {} }
+    error("Fidelity: Keine Serverantwort beim Kontoabruf.")
   end
 
   if isHtmlLogin(response, mimeType) then
-    return "Fidelity: performance-api Session ungültig (Login-Seite bekommen). Bitte Cookie Import mit frischen Cookies wiederholen (PORTSUM_XSRF-TOKEN / portsum_.csrf prüfen)."
+    error("Fidelity: performance-api Session ungültig (Login-Seite bekommen). Bitte Cookie Import mit frischen Cookies wiederholen (PORTSUM_XSRF-TOKEN / portsum_.csrf prüfen).")
   end
 
   local success, data = pcall(function() return JSON(response):dictionary() end)
   if not success or not data then
-    return { balance = 0, securities = {} }
+    error("Fidelity: Ungültige Serverantwort beim Kontoabruf.")
   end
 
-  -- Fidelity liefert asset-allocation oft als { assetAllocation: { ... } }.
-  local payload = data
-  if data.assetAllocation and type(data.assetAllocation) == "table" then
-    payload = data.assetAllocation
-  end
-
-  local totalBalance = tonumber(payload.overallMarketValue) or 0
-  local holdings = payload.holdingsDetails
-  if not holdings and payload.aggregateStyleDetail and payload.aggregateStyleDetail.holdingDetails then
-    holdings = payload.aggregateStyleDetail.holdingDetails
-  end
-
-  if totalBalance == 0 and holdings and type(holdings) == "table" then
-    -- Fallback: Balance aus holdingsDetails aufsummieren.
-    for _, h in ipairs(holdings) do
-      local marketValue = tonumber(h.marketValue) or 0
-      totalBalance = totalBalance + marketValue
-    end
-  end
-
-  local securities = {}
-  if holdings and type(holdings) == "table" then
-    for _, h in ipairs(holdings) do
-      local symbol = h.symbol or ""
-      local name = h.longName or h.name or symbol
-      if not name or name == "" then
-        name = "Unknown"
-      end
-
-      local quantity = tonumber(h.quantity) or 0
-      local marketValue = tonumber(h.marketValue) or 0
-      local rawPrice = tonumber(h.price)
-      local price = rawPrice or 0
-
-      -- Wenn Preis fehlt, kann man ihn aus Marktwert/Anzahl ableiten.
-      if rawPrice == nil and quantity > 0 then
-        price = marketValue / quantity
-      end
-
-      table.insert(securities, {
-        name = name,
-        isin = h.cusip or "",
-        securityNumber = symbol,
-        quantity = quantity,
-        price = price,
-        purchasePrice = 0,
-        amount = marketValue,
-        currencyOfPrice = "USD",
-        currencyOfOriginalAmount = "USD"
-      })
-    end
-  end
-
-  return { balance = totalBalance, securities = securities }
+  return buildRestPortfolio(data)
 end
 
 function EndSession()

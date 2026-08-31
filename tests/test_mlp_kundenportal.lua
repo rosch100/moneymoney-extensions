@@ -140,6 +140,26 @@ assertEq(formatCurrency(50000.00), "50.000,00 €", "formatCurrency.gross")
 assertEq(formatCurrency(50.00), "50,00 €", "formatCurrency.klein")
 assertEq(formatCurrency(0), "0,00 €", "formatCurrency.null")
 
+local randomOk, randomError = pcall(generateRandomBytes, 16)
+assertEq(randomOk, false, "generateRandomBytes.requiresSecureRandom")
+assertContains(randomError, "MM.random", "generateRandomBytes.secureRandomMessage")
+local vueWithoutValue = mapVueContractToInternal({
+  id = "vue-missing-value",
+  number = "vue-missing-value",
+})
+if not vueWithoutValue then
+  error("mapVueContractToInternal unexpectedly rejected valid contract identity")
+end
+assertEq(vueWithoutValue.shareValue, nil, "mapVueContractToInternal.noDummyValue")
+local apiWithoutValue = mapApiContractToInternal({
+  id = "api-missing-value",
+  number = "api-missing-value",
+})
+if not apiWithoutValue then
+  error("mapApiContractToInternal unexpectedly rejected valid contract identity")
+end
+assertEq(apiWithoutValue.shareValue, nil, "mapApiContractToInternal.noDummyValue")
+
 -- ============================================================
 -- Tests: Login-State-Machine (Post-Login-Flow Vorbereitung)
 -- ============================================================
@@ -162,6 +182,11 @@ assertEq(mfaLogin.mfaToken, "abc123", "parseLoginResponse.mfa.token")
 
 local tokenLogin = parseLoginResponse('{"access_token":"tok","expires_in":3600}')
 assertEq(tokenLogin.success, true, "parseLoginResponse.token.success")
+local invalidRequest = parseLoginResponse('{"error":"invalid_request"}')
+assertEq(
+  invalidRequest.error,
+  "Token-Anfrage vom Server abgelehnt.",
+  "parseLoginResponse.invalidRequest.technical")
 
 local iframeJson = '{"iframeUrl":"https://vue.mlp.de/vu/client/index.html?source=https://kundenportal.mlp.de&token=eyJtest"}'
 local iframeUrl = extractIframeUrlFromPortalResponse(iframeJson)
@@ -376,6 +401,148 @@ local missingMfaState = InitializeSession2(
 assertEq(type(missingMfaState), "string", "InitializeSession2.missingMfaState.type")
 assertEq(missingMfaState, "MFA-Session abgelaufen. Bitte neu einloggen.",
   "InitializeSession2.missingMfaState.message")
+
+local firstConnection = {
+  language = "",
+  useragent = "test",
+  get = function() return nil end,
+  getCookies = function() return "" end,
+  request = function()
+    return '{"pending":true}'
+  end,
+}
+local restoredMfaCalls = 0
+local restoredConnection = {
+  language = "",
+  useragent = "test",
+  get = function() return nil end,
+  getCookies = function() return "" end,
+  request = function()
+    restoredMfaCalls = restoredMfaCalls + 1
+    return '{"pending":true}'
+  end,
+}
+Connection = function()
+  return firstConnection
+end
+LocalStorage = {}
+performLogin = function()
+  return {success = false, requiresMfa = true, mfaToken = "mfa-token"}
+end
+local mfaChallenge = InitializeSession2(
+  ProtocolWebBanking,
+  "MLP Versicherungen",
+  1,
+  {"mlp-user", "password"},
+  true)
+assertEq(type(mfaChallenge), "table", "InitializeSession2.mfaChallenge")
+LocalStorage.connection = restoredConnection
+LocalStorage.connectionAccountKey = "mlp-user"
+InitializeSession2(
+  ProtocolWebBanking,
+  "MLP Versicherungen",
+  2,
+  {"123456"},
+  true)
+assertEq(restoredMfaCalls, 1, "InitializeSession2.restoresConnectionForStep2")
+
+Connection = function()
+  return {
+    language = "",
+    useragent = "test",
+    get = function() return nil end,
+    getCookies = function() return "" end,
+  }
+end
+LocalStorage = {}
+performLogin = function()
+  return {success = false, error = "Ungültige Anmeldedaten."}
+end
+local rejectedCredentials = InitializeSession2(
+  ProtocolWebBanking,
+  "MLP Versicherungen",
+  1,
+  {"mlp-user", "wrong"},
+  true)
+assertEq(rejectedCredentials, LoginFailed, "InitializeSession2.rejectedCredentials")
+
+local missingAccountOk, missingAccountError = pcall(RefreshAccount, nil, nil)
+assertEq(missingAccountOk, false, "RefreshAccount.rejectsMissingAccount")
+assertContains(missingAccountError, "Kontoabruf", "RefreshAccount.missingAccountMessage")
+
+local invalidRefreshOk, invalidRefreshError = pcall(
+  RefreshAccount,
+  {accountNumber = "missing-contract"},
+  nil)
+assertEq(invalidRefreshOk, false, "RefreshAccount.propagatesMissingContract")
+assertContains(invalidRefreshError, "Kontoabruf", "RefreshAccount.missingContractMessage")
+
+findContractByNumber = function()
+  return {
+    number = "missing-value",
+    currency = "EUR",
+  }
+end
+local missingValueOk, missingValueError = pcall(
+  RefreshAccount,
+  {accountNumber = "missing-value"},
+  nil)
+assertEq(missingValueOk, false, "RefreshAccount.requiresShareValue")
+assertContains(missingValueError, "Vertragswert", "RefreshAccount.shareValueMessage")
+
+performLogin = function()
+  return {
+    success = false,
+    error = "403 Invalid credentials",
+    needsCookie = true,
+  }
+end
+tryCookieAuth = function()
+  return "Cookie-Import erforderlich"
+end
+assertEq(
+  loginStep1({"mlp-user", "wrong"}),
+  LoginFailed,
+  "loginStep1.classifiesCredentialsBeforeCookieFallback")
+
+local incompleteVueContract = mapVueContractToInternal({
+  number = "VUE-1",
+  shareValue = 100,
+})
+assertEq(incompleteVueContract.company.shortName, nil, "mapVueContract.noDummyCompany")
+assertEq(incompleteVueContract.contribution, nil, "mapVueContract.noDummyContribution")
+
+local incompleteApiContract = mapApiContractToInternal({
+  number = "API-1",
+  shareValue = 100,
+})
+assertEq(incompleteApiContract.company.shortName, nil, "mapApiContract.noDummyCompany")
+assertEq(incompleteApiContract.contribution, nil, "mapApiContract.noDummyContribution")
+assertEq(incompleteApiContract.currency, nil, "mapApiContract.noDummyCurrency")
+assertEq(incompleteApiContract.state, nil, "mapApiContract.noDummyState")
+
+local missingCompanyOk, missingCompanyError = pcall(
+  _G.createAccountFromContract,
+  {number = "MISSING-COMPANY", currency = "EUR"})
+assertEq(missingCompanyOk, false, "createAccountFromContract.requiresCompany")
+assertContains(missingCompanyError, "Versicherer", "createAccountFromContract.companyMessage")
+
+local missingCurrencyOk, missingCurrencyError = pcall(
+  _G.createAccountFromContract,
+  {number = "MISSING-CURRENCY", company = {shortName = "Versicherer"}})
+assertEq(missingCurrencyOk, false, "createAccountFromContract.requiresCurrency")
+assertContains(missingCurrencyError, "Währung", "createAccountFromContract.currencyMessage")
+
+local missingNumberOk, missingNumberError = pcall(
+  _G.createAccountFromContract,
+  {company = {shortName = "Versicherer"}, currency = "EUR"})
+assertEq(missingNumberOk, false, "createAccountFromContract.requiresNumber")
+assertContains(missingNumberError, "Vertragsnummer", "createAccountFromContract.numberMessage")
+
+assertEq(
+  calculateTotalContributions({}),
+  nil,
+  "calculateTotalContributions.omitsUnknownPurchasePrice")
 
 print()
 print("ALL TESTS PASSED")
