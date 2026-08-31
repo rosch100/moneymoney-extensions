@@ -1,12 +1,12 @@
 --
--- Fidelity Investments — MoneyMoney Web Banking Extension (Beta 0.91, Cookie-Import)
+-- Fidelity Investments — MoneyMoney Web Banking Extension (Beta 0.92, Cookie-Import)
 -- https://www.fidelity.com
 -- Dokumentation: docs/LUA-EXTENSIONS.md
 -- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking{
-  version     = 0.91,
+  version     = 0.92,
   url         = "https://www.fidelity.com",
   services    = {"Fidelity"},
   description = "Fidelity Investments — Beta (Cookie-Import)"

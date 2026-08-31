@@ -1,4 +1,4 @@
--- Tests für MLP Versicherungen Extension v0.90
+-- Tests für MLP Versicherungen Extension v0.91
 -- Testet Hilfsfunktionen, Login-State-Machine und Datenstrukturen
 
 -- WebBanking/Connection/MM stubben

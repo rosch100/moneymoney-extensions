@@ -86,6 +86,12 @@ end
 
 dofile("extensions/Bank of America.lua")
 
+do
+  local result = performPasswordLogin("user123", "secret")
+  assertEq(result, "Keine Antwort vom Login-Server.",
+    "performPasswordLogin.delegatesToSparta")
+end
+
 assertTrue(canUseAcwCrypto(), "canUseAcwCrypto")
 assertTrue(canUseRsaLogin(), "canUseRsaLogin")
 

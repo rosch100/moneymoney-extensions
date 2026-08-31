@@ -6,11 +6,11 @@ Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 
 | Extension | Version | Login | Status |
 |-----------|---------|-------|--------|
-| [Bank of America](extensions/Bank%20of%20America.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Browser-Fingerprint) |
-| [Fidelity](extensions/Fidelity.lua) | **0.91 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
-| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import; JWE/SecureGo implementiert | Direct-Login, wenn die erforderlichen MoneyMoney-Krypto-APIs verfügbar sind |
-| [Presidential Bank](extensions/Presidential%20Bank.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
-| [Shareview](extensions/Shareview.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
+| [Bank of America](extensions/Bank%20of%20America.lua) | **0.91 Beta** | Username/Passwort + MFA; Cookie-Import | Sparta-Login mit RSA-Krypto-API; Cookie-Import als Alternative |
+| [Fidelity](extensions/Fidelity.lua) | **0.92 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
+| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.91 Beta** | Cookie-Import; JWE/SecureGo implementiert | Direct-Login, wenn die erforderlichen MoneyMoney-Krypto-APIs verfügbar sind |
+| [Presidential Bank](extensions/Presidential%20Bank.lua) | 1.01 | Username/Passwort + MFA | Cookie-Import optional |
+| [Shareview](extensions/Shareview.lua) | 1.01 | Username/Passwort + MFA | Cookie-Import optional |
 
 **Beta:** Der Cookie-Import ist der unterstützte Anmeldeweg. Bei MLP ist der
 JWE-/SecureGo-Login implementiert und wird verwendet, wenn MoneyMoney die
