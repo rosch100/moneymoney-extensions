@@ -190,6 +190,11 @@ do
   assertEq(unknownTypeOk, false, "parseAccounts.rejectsUnknownType")
 end
 
+assertEq(
+  _G.classifyLoginRedirectError({targetView = "consumer_login"}),
+  "Anmeldeserver meldet eine ungültige Login-Weiterleitung.",
+  "classifyLoginRedirectError.consumerLogin")
+
 -- mapAccountType
 do
   assertEq(mapAccountType("checking"), AccountTypeGiro, "mapAccountType.checking")

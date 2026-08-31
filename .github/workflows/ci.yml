@@ -64,7 +64,7 @@ jobs:
             exit 0
           fi
           for file in "${files[@]}"; do
-            lua -e 'assert(loadfile(arg[1]))' -- "$file"
+            LUA_FILE="${file}" lua -e 'assert(loadfile(os.getenv("LUA_FILE")))'
           done
 
       - name: Setup Python
