@@ -6,7 +6,7 @@ Cookie-Import funktioniert. Für Username/Passwort-Login in Lua fehlen Engine-Er
 |-----------|---------|---------------------|
 | Bank of America | Anti-Fraud-Fingerprint nur im Browser (`signOnV2.go`) | `WebbankingBrowser` |
 | Fidelity | Akamai (`_abck`, `bm_*`) + MFA | `WebbankingBrowser` |
-| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`) | `MM.aes256gcm`, `MM.rsaEncrypt` mit `"pkcs1-oaep sha512"`; oder `WebbankingBrowser` |
+| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`) | `MM.aes256gcm`; RSA-OAEP mit SHA-512 wird bevorzugt, SHA-256 ist als kompatible Variante implementiert; alternativ `WebbankingBrowser` |
 
 Extension-Details: [LUA-EXTENSIONS.md](LUA-EXTENSIONS.md)
 
@@ -16,7 +16,8 @@ JWE-Parameter: `alg` RSA-OAEP-512, `enc` A256GCM, `kid` `cas-pin-encryption-prod
 
 ```lua
 MM.aes256gcm(key, iv, plaintext, aad?) → ciphertext, tag   -- fehlt
-MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha512") → ciphertext   -- fehlt (sha256 vorhanden)
+MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha512") → ciphertext   -- bevorzugt
+MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha256") → ciphertext   -- implementierte Alternative
 ```
 
 ## WebbankingBrowser — Beispiel

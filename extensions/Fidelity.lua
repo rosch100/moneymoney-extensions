@@ -312,67 +312,6 @@ function directLoginUnavailableMessage()
     .. "Details: docs/ENGINE-API-GAPS.md"
 end
 
--- Für künftige WebbankingBrowser-Anbindung; derzeit nicht aufgerufen (Akamai/MFA).
-function performFidelityPasswordLogin(username, password)
-  MM.printStatus("Logging in to Fidelity...")
-
-  local _, _ = connection:request("GET", "https://digital.fidelity.com/prgw/digital/signin/retail", nil, nil, {
-    ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    ["Accept-Language"] = "en-US,en;q=0.9"
-  })
-  session.cookies = mergeCookies(session.cookies, connection:getCookies() or "")
-
-  local loginBody = JSON():set({
-    username = username,
-    password = password,
-    deviceInfo = { deviceType = "browser", browser = "Safari", os = "MacOS" }
-  }):json()
-
-  local loginHeaders = {
-    ["Accept"] = "*/*",
-    ["Content-Type"] = "application/json",
-    ["Cookie"] = session.cookies,
-    ["Origin"] = "https://digital.fidelity.com",
-    ["Referer"] = "https://digital.fidelity.com/",
-    ["AppId"] = "RETAIL-CC-LOGIN-SDK",
-    ["Token-Location"] = "HEADER",
-    ["Accept-Token-Type"] = "ET",
-    ["Accept-Token-Location"] = "HEADER"
-  }
-
-  local loginResponse, _, mimeType = connection:request("POST", CONSTANTS.loginApi, loginBody, "application/json", loginHeaders)
-  session.cookies = mergeCookies(session.cookies, connection:getCookies() or session.cookies)
-
-  if not loginResponse then
-    return "Login failed: No response from server"
-  end
-
-  if mimeType and mimeType:find("json") then
-    local success, jsonData = pcall(function() return JSON(loginResponse):dictionary() end)
-    if success and jsonData then
-      if jsonData.sysMsgs and jsonData.sysMsgs.sysMsg then
-        local sysMsg = jsonData.sysMsgs.sysMsg[1] or jsonData.sysMsgs.sysMsg
-        if sysMsg then
-          return "Login failed: " .. (sysMsg.message or sysMsg.detail or "Unknown error")
-        end
-      end
-      if jsonData.error or jsonData.errorCode then
-        return LoginFailed
-      end
-      if jsonData.token or jsonData.accessToken then
-        return nil
-      end
-    end
-  end
-
-  if session.cookies:match("ATC") or session.cookies:match("ET") then
-    MM.printStatus("Login successful")
-    return nil
-  end
-
-  return "Login failed. Try Cookie Import mode with 'COOKIE:' prefix."
-end
-
 function loginWithImportedCookies(cookieString)
   MM.printStatus("Using imported cookies...")
 

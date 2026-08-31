@@ -367,5 +367,15 @@ local jsonStr = encodeJson(testObj)
 assertContains(jsonStr, "name", "encodeJson.hasName")
 assertContains(jsonStr, "Test", "encodeJson.hasValue")
 
+local missingMfaState = InitializeSession2(
+  ProtocolWebBanking,
+  "MLP Versicherungen",
+  2,
+  {"123456"},
+  true)
+assertEq(type(missingMfaState), "string", "InitializeSession2.missingMfaState.type")
+assertEq(missingMfaState, "MFA-Session abgelaufen. Bitte neu einloggen.",
+  "InitializeSession2.missingMfaState.message")
+
 print()
 print("ALL TESTS PASSED")

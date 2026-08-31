@@ -82,6 +82,30 @@ export function missingCritical(cookies, bank) {
   );
 }
 
+/** @typedef {'permission' | 'empty' | 'missing' | 'partial'} ExportBlockReason */
+
+/**
+ * @param {CookieEntry[]} cookies
+ * @param {string[]} missing
+ * @param {string[]} failedOrigins
+ * @returns {ExportBlockReason | null}
+ */
+export function exportBlockReason(cookies, missing, failedOrigins) {
+  if (failedOrigins.length > 0 && cookies.length === 0) {
+    return 'permission';
+  }
+  if (cookies.length === 0) {
+    return 'empty';
+  }
+  if (missing.length > 0) {
+    return 'missing';
+  }
+  if (failedOrigins.length > 0) {
+    return 'partial';
+  }
+  return null;
+}
+
 /**
  * @param {BankConfig} bank
  * @param {string[]} missing
@@ -131,17 +155,9 @@ export async function collectCookies(api, bank) {
   }
 
   /**
-   * @param {string} origin
+   * @param {chrome.cookies.Cookie[]} list
    */
-  async function addFromOrigin(origin) {
-    const url = `${origin}/`;
-    let list = [];
-    try {
-      list = await api.cookies.getAll({ url });
-    } catch {
-      failedOrigins.push(origin);
-      return;
-    }
+  function mergeList(list) {
     for (const item of list) {
       if (!item?.name) {
         continue;
@@ -152,6 +168,32 @@ export async function collectCookies(api, bank) {
         domain: item.domain,
         path: item.path,
       });
+    }
+  }
+
+  /**
+   * @param {string} origin
+   */
+  async function addFromOrigin(origin) {
+    const url = `${origin}/`;
+    const hostname = new URL(origin).hostname;
+    let gotAny = false;
+    let queryFailed = false;
+
+    for (const details of [{ url }, { domain: hostname }]) {
+      try {
+        const list = await api.cookies.getAll(details);
+        if (list.length > 0) {
+          gotAny = true;
+        }
+        mergeList(list);
+      } catch {
+        queryFailed = true;
+      }
+    }
+
+    if (queryFailed && !gotAny) {
+      failedOrigins.push(origin);
     }
   }
 

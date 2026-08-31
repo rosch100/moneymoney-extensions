@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import shutil
+from urllib.parse import urlparse
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BROWSER = ROOT / "browser-extension"
@@ -32,6 +34,16 @@ SHARED_FILES = (
     "popup.js",
 )
 
+REQUIRED_BANK_KEYS = {
+    "label",
+    "match_host",
+    "origins",
+    "session_host",
+    "critical",
+    "allow_duplicate_names",
+    "priority",
+}
+
 
 def assert_true(cond: bool, msg: str) -> None:
     if not cond:
@@ -40,29 +52,101 @@ def assert_true(cond: bool, msg: str) -> None:
 
 def load_banks() -> dict:
     banks = json.loads(BANKS.read_text(encoding="utf-8"))
-    assert_true(isinstance(banks, dict) and banks, f"{BANKS.name}: erwartetes Objekt mit Banken")
+    validate_banks(banks)
     return banks
 
 
-def host_permissions_from_banks(banks: dict) -> list[str]:
-    patterns: list[str] = []
-    seen: set[str] = set()
+def origin_hostname(origin: str) -> str:
+    parsed = urlparse(origin)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise AssertionError(f"{BANKS.name}: ungültige Origin: {origin!r}") from exc
+    hostname = parsed.hostname
+    assert_true(
+        parsed.scheme == "https"
+        and hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+        and port is None
+        and parsed.netloc.lower() == hostname.lower()
+        and not parsed.path
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment,
+        f"{BANKS.name}: ungültige Origin: {origin!r}",
+    )
+    return hostname
+
+
+def validate_banks(banks: dict) -> None:
+    """Validiert das vollständige Schema und die Origin-Abdeckung der Bankkonfiguration."""
+    assert_true(isinstance(banks, dict) and banks, f"{BANKS.name}: erwartetes Objekt mit Banken")
     for bank_id, entry in banks.items():
         assert_true(isinstance(entry, dict), f"{BANKS.name}: Bank '{bank_id}' ist kein Objekt")
+        missing_keys = REQUIRED_BANK_KEYS - entry.keys()
+        assert_true(
+            not missing_keys,
+            f"{BANKS.name}: Bank '{bank_id}' fehlende Keys: {sorted(missing_keys)}",
+        )
         assert_true(
             "domains" not in entry,
             f"{BANKS.name}: Bank '{bank_id}' hat veraltetes Feld 'domains' (nur origins nutzen)",
         )
-        raw_origins = entry.get("origins")
         assert_true(
-            isinstance(raw_origins, list) and len(raw_origins) > 0,
+            isinstance(entry["label"], str) and entry["label"],
+            f"{BANKS.name}: Bank '{bank_id}' label ungültig",
+        )
+        assert_true(
+            isinstance(entry["match_host"], str) and entry["match_host"],
+            f"{BANKS.name}: Bank '{bank_id}' match_host ungültig",
+        )
+        try:
+            re.compile(entry["match_host"])
+        except re.error as exc:
+            raise AssertionError(
+                f"{BANKS.name}: Bank '{bank_id}' match_host ungültig: {exc}"
+            ) from exc
+        raw_origins = entry["origins"]
+        assert_true(
+            isinstance(raw_origins, list) and raw_origins,
             f"{BANKS.name}: Bank '{bank_id}' fehlt nicht-leeres 'origins'",
         )
+        origin_hosts: set[str] = set()
         for origin in raw_origins:
             assert_true(
-                isinstance(origin, str) and origin.startswith("https://"),
+                isinstance(origin, str),
                 f"{BANKS.name}: Bank '{bank_id}' hat ungültige Origin: {origin!r}",
             )
+            origin_hosts.add(origin_hostname(origin))
+        session_host = entry.get("session_host")
+        assert_true(
+            isinstance(session_host, str) and session_host,
+            f"{BANKS.name}: Bank '{bank_id}' session_host ungültig",
+        )
+        assert_true(
+            session_host in origin_hosts,
+            f"{BANKS.name}: Bank '{bank_id}' session_host '{session_host}' fehlt in origins "
+            f"(jede genutzte Subdomain braucht einen https://-Eintrag — keine Wildcards wegen Safari 27)",
+        )
+        for key in ("critical", "allow_duplicate_names", "priority"):
+            assert_true(
+                isinstance(entry[key], list)
+                and all(isinstance(value, str) and value for value in entry[key]),
+                f"{BANKS.name}: Bank '{bank_id}' {key} ungültig",
+            )
+        assert_true(
+            entry["priority"],
+            f"{BANKS.name}: Bank '{bank_id}' priority leer",
+        )
+
+
+def host_permissions_from_banks(banks: dict) -> list[str]:
+    validate_banks(banks)
+    patterns: list[str] = []
+    seen: set[str] = set()
+    for entry in banks.values():
+        for origin in entry["origins"]:
             pattern = f"{origin.rstrip('/')}/*"
             if pattern in seen:
                 continue

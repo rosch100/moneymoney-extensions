@@ -218,5 +218,37 @@ do
   assertEq(isMfaPage(nil), false, "isMfaPage.nil=false")
 end
 
+EndSession()
+local authFailures = {}
+local function checkAuthError(value, label)
+  if type(value) == "string" and value ~= "" and value ~= LoginFailed then
+    print("OK    " .. label)
+  else
+    authFailures[#authFailures + 1] = label .. "=" .. tostring(value)
+    print("FAIL  " .. label)
+  end
+end
+local missingSession = InitializeSession2(
+  ProtocolWebBanking,
+  "Shareview",
+  2,
+  {"123456"},
+  true)
+checkAuthError(missingSession, "InitializeSession2.missingSession.transient")
+
+local missingPassword = loginStep1({"user", ""}, true)
+checkAuthError(missingPassword, "loginStep1.missingPassword.validation")
+
+EndSession()
+local missingDobSession = submitDobAndLogin("01.01.1970")
+checkAuthError(missingDobSession, "submitDobAndLogin.missingSession.transient")
+
+EndSession()
+local missingMfaSession = submitMfaCode({"123456"})
+checkAuthError(missingMfaSession, "submitMfaCode.missingSession.transient")
+if #authFailures > 0 then
+  error("Auth error classification failed: " .. table.concat(authFailures, ", "))
+end
+
 print()
 print("ALL TESTS PASSED")

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MoneyMoney Helper",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Vollständige Session-Cookies (inkl. HttpOnly) für MoneyMoney Web-Banking Extensions",
   "permissions": ["cookies"],
   "host_permissions": [

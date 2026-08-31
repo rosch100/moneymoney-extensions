@@ -7,12 +7,14 @@ Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 | Extension | Version | Login | Status |
 |-----------|---------|-------|--------|
 | [Bank of America](extensions/Bank%20of%20America.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Browser-Fingerprint) |
-| [Fidelity](extensions/Fidelity.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
-| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import | JWE-Login blockiert (`MM.aes256gcm` fehlt) |
+| [Fidelity](extensions/Fidelity.lua) | **0.91 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
+| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import; JWE/SecureGo implementiert | Direct-Login in MoneyMoney blockiert (`MM.aes256gcm` fehlt) |
 | [Presidential Bank](extensions/Presidential%20Bank.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
 | [Shareview](extensions/Shareview.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
 
-**Beta (0.9):** Nur Cookie-Import aus einer Browser-Session. Kein Direct-Login mit Benutzername/Passwort.
+**Beta:** Der Cookie-Import ist der unterstützte Anmeldeweg. Bei MLP ist der
+JWE-/SecureGo-Login implementiert, benötigt aber Krypto-APIs, die MoneyMoney
+derzeit nicht vollständig bereitstellt.
 
 **MLP Bank vs. MLP Versicherungen:** FinTS-Giro (MLP Bank) ist ein separates MoneyMoney-Produkt. Diese Extension deckt nur Versicherungsverträge über `vue.mlp.de` ab.
 
@@ -40,7 +42,10 @@ Benutzername ist bei Beta-Extensions irrelevant.
 3. Cookies mit der **MoneyMoney Helper**-Extension kopieren (siehe unten)
 4. `COOKIE:…`-String als Passwort in MoneyMoney einfügen
 
-Session wird in `LocalStorage` persistiert; Folge-Syncs nutzen gespeicherte Cookies, solange die Session gültig ist.
+Die Extensions persistieren die Verbindung und ihre bankspezifischen
+Sessiondaten in `LocalStorage`. Folge-Syncs prüfen und verwenden diese Daten,
+solange die jeweilige Bank die Session noch akzeptiert. Die gespeicherten
+Felder sind unter [Lua-Extensions](docs/LUA-EXTENSIONS.md) aufgeführt.
 
 ### 1. Safari Extension (empfohlen)
 
@@ -62,7 +67,7 @@ DevTools → Network → **Save all as HAR**, dann:
 | Bank | Befehl | Wichtige Cookies |
 |------|--------|------------------|
 | Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN` |
-| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | `ATC`, `FC`, `RC`, `SC`, `MC`, `_abck`, `bm_*` |
+| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | kritisch: `ATC`, `_abck`; zusätzlich unter anderem `ET`, `FC`, `RC`, `SC`, `MC`, `PORTSUM_XSRF-TOKEN`, `bm_*` |
 | MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` | `VUSESSIONID` von `vue.mlp.de` |
 
 ### 3. Tampermonkey (optional)
@@ -81,11 +86,18 @@ Vertragsübersicht auf `vue.mlp.de` öffnen, bevor exportiert wird. Beim ersten 
 
 ### Presidential Bank
 
-Username + Passwort → MFA (SMS, E-Mail, Voice oder TOTP). Session in `LocalStorage`; privates Gerät (`MAF_IB_*`) verlängert die Laufzeit.
+Username + Passwort → MFA (SMS, E-Mail, Voice oder TOTP). Alternativ wird
+`COOKIE:SESSION_TOKEN=…;rftoken=…;…` akzeptiert. Session, Refresh-/CSRF-Token
+und die Kennung des privaten Geräts (`MAF_IB_*`) werden in `LocalStorage`
+gespeichert. Ein als privat registriertes Gerät darf die persistierte Session
+auch nach einer Änderung des MoneyMoney-Zugangsschlüssels wiederverwenden.
 
 ### Shareview
 
-Username + Passwort + Geburtsdatum + MFA. Für Background-Sync: `username|TT.MM.JJJJ` als Benutzername (Geburtsdatum im Keychain).
+Username + Passwort + Geburtsdatum + sechsstelliger MFA-Code. Für
+Background-Sync: `username|TT.MM.JJJJ` als Benutzername (Geburtsdatum im
+Keychain); auch `/` und `-` sind als Datumstrenner zulässig. Alternativ kann
+`COOKIE:FedAuth=…` manuell importiert werden.
 
 ## Dokumentation
 
@@ -98,11 +110,17 @@ Username + Passwort + Geburtsdatum + MFA. Für Background-Sync: `username|TT.MM.
 
 ## Entwicklung
 
+Repository: https://github.com/rosch100/moneymoney-extensions
+
 Lokal: Lua 5.4, Python 3.11.
 
 ```bash
 for f in tests/*.lua; do lua "$f"; done
+python3 tests/test_extensions_conformance.py
 python3 tests/test_external_scripts_conformance.py
+python3 tests/test_cookie_export_config.py
+python3 tests/test_browser_extension_manifest.py
+node tests/test_cookie_export.mjs
 ```
 
 CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)

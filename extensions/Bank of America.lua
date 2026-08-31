@@ -1631,26 +1631,27 @@ function completeLoginNavigation()
   return true
 end
 
-function isAuthenticatedAccountPage(response)
+local function isBoaLoginPage(response)
   if not response then
     return false
   end
-
-  local hasAccountData = response:match("Ending in")
-    or response:match("ending in")
-    or response:match("account%-details")
-    or response:match("Account Overview")
-    or response:match("balance")
-
-  local isLoginPage = response:match("Sign In")
+  return (response:match("Sign In")
     or response:match("Sign in")
     or response:match("Log In")
     or response:match("Log in")
     or response:match("Enter your user ID")
     or response:match("Bank of America %- Banking, Credit Cards")
-    or response:match("choose the card that works for you")
+    or response:match("choose the card that works for you")) ~= nil
+end
 
-  return hasAccountData and not isLoginPage
+function isAuthenticatedAccountPage(response)
+  if not response or isBoaLoginPage(response) then
+    return false
+  end
+  return (response:match("Ending in")
+    or response:match("ending in")
+    or response:match("account%-details")
+    or response:match("Account Overview")) ~= nil
 end
 
 function verifyActiveSession()
@@ -1831,8 +1832,8 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     return submitMfaLoginStep(credentials and credentials[1] or "")
   end
 
-  boaDebugLog("InitializeSession2: LoginFailed (kein MFA pending)")
-  return LoginFailed
+  boaDebugLog("InitializeSession2: MFA-Session fehlt")
+  return "MFA session expired. Please start the login again."
 end
 
 function loginWithImportedCookies(cookieString)
@@ -1864,43 +1865,31 @@ function loginWithImportedCookies(cookieString)
     CONSTANTS.baseUrl .. "/"
   )
 
-  if testResponse then
-    local hasAccountData = testResponse:match("Ending in") or
-                          testResponse:match("ending in") or
-                          testResponse:match("account%-details") or
-                          testResponse:match("Account Overview") or
-                          testResponse:match("balance")
-
-    local isLoginPage = testResponse:match("Sign In") or
-                       testResponse:match("Sign in") or
-                       testResponse:match("Log In") or
-                       testResponse:match("Log in") or
-                       testResponse:match("Enter your user ID") or
-                       testResponse:match("Bank of America %- Banking, Credit Cards") or
-                       testResponse:match("choose the card that works for you")
-
-    if hasAccountData and not isLoginPage then
-      rememberStatementPageUrl(testResponse, session.adxToken)
-      updateAdxFromResponse(testResponse, session.adxToken)
-      return nil
-    end
-
-    if isLoginPage then
-      return "SESSION EXPIRED OR INVALID - redirected to login/marketing page.\n\n" ..
-             "Your cookies have expired or are incomplete.\n\n" ..
-             "TO FIX:\n" ..
-             "1. Open browser and go to www.bankofamerica.com\n" ..
-             "2. Login with your credentials\n" ..
-             "3. After successful login, open DevTools (F12/Cmd+Opt+I)\n" ..
-             "4. Go to Application/Storage -> Cookies\n" ..
-             "5. Select 'secure.bankofamerica.com'\n" ..
-             "6. Copy ALL cookies with their values\n" ..
-             "7. Paste into MoneyMoney password field as: COOKIE:SMSESSION=...;SSOTOKEN=...\n\n" ..
-             "CRITICAL: Copy cookies immediately after login - they expire quickly!"
-    end
+  if not testResponse then
+    return "Cookie session could not be verified: no response from Bank of America."
   end
 
-  return nil
+  if isAuthenticatedAccountPage(testResponse) then
+    rememberStatementPageUrl(testResponse, session.adxToken)
+    updateAdxFromResponse(testResponse, session.adxToken)
+    return nil
+  end
+
+  if isBoaLoginPage(testResponse) then
+    return "SESSION EXPIRED OR INVALID - redirected to login/marketing page.\n\n" ..
+           "Your cookies have expired or are incomplete.\n\n" ..
+           "TO FIX:\n" ..
+           "1. Open browser and go to www.bankofamerica.com\n" ..
+           "2. Login with your credentials\n" ..
+           "3. After successful login, open DevTools (F12/Cmd+Opt+I)\n" ..
+           "4. Go to Application/Storage -> Cookies\n" ..
+           "5. Select 'secure.bankofamerica.com'\n" ..
+           "6. Copy ALL cookies with their values\n" ..
+           "7. Paste into MoneyMoney password field as: COOKIE:SMSESSION=...;SSOTOKEN=...\n\n" ..
+           "CRITICAL: Copy cookies immediately after login - they expire quickly!"
+  end
+
+  return "Cookie session could not be verified: unexpected Bank of America response."
 end
 
 function ListAccounts(knownAccounts)
@@ -2131,6 +2120,16 @@ local function enrichTransactionsWithDetails(transactions, requestHeaders, refer
   end
 end
 
+local function timeFromYmd(yearValue, monthValue, dayValue)
+  local year = tonumber(yearValue)
+  local month = tonumber(monthValue)
+  local day = tonumber(dayValue)
+  if not year or not month or not day then
+    error("Invalid numeric date components")
+  end
+  return os.time({year = year, month = month, day = day})
+end
+
 local function parseTransactionRow(row, sinceTimestamp)
   local rowLower = row:lower()
 
@@ -2233,7 +2232,7 @@ local function parseTransactionRow(row, sinceTimestamp)
     else
       mm, dd, yyyy = dateStr:match("(%d%d)/(%d%d)/(%d%d%d%d)")
       if mm and dd and yyyy then
-        bookingDate = os.time({year = tonumber(yyyy), month = tonumber(mm), day = tonumber(dd)})
+        bookingDate = timeFromYmd(yyyy, mm, dd)
         valutaDate = bookingDate
       end
     end
@@ -2455,7 +2454,7 @@ local function appendParsedStatement(statements, seenDocIds, docId, docName, dat
   local y, m, d = dateStr:match("(%d%d%d%d)-(%d%d)-(%d%d)")
   local bookingDate = os.time()
   if y and m and d then
-    bookingDate = os.time({year = tonumber(y), month = tonumber(m), day = tonumber(d)})
+    bookingDate = timeFromYmd(y, m, d)
   end
 
   if sinceTimestamp and bookingDate < sinceTimestamp then
@@ -2547,7 +2546,7 @@ local function parseStatementCreationDate(periodEnd)
   end
   local y, m, d = periodEnd:match("(%d%d%d%d)-(%d%d)-(%d%d)")
   if y and m and d then
-    return os.time({year = tonumber(y), month = tonumber(m), day = tonumber(d)})
+    return timeFromYmd(y, m, d)
   end
   return os.time()
 end

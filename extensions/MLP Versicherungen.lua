@@ -25,7 +25,8 @@ local CONSTANTS = {
   vueTokenEndpoint  = "/vu/api/token",
   vueClientPath     = "/vu/client/index.html",
   portalVuApi       = "/api/app/vu",
-  portalOkpLogin    = "/api/okp/login?backUrl=https://kundenportal.mlp.de/kunde"
+  portalOkpLogin    = "/api/okp/login?backUrl=https://kundenportal.mlp.de/kunde",
+  mfaSessionExpired = "MFA-Session abgelaufen. Bitte neu einloggen."
 }
 
 -- Globale (modulweite) Variablen müssen VOR den Funktionen deklariert werden
@@ -425,7 +426,7 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     return submitMfaCode(credentials[1])
   end
 
-  return LoginFailed
+  return CONSTANTS.mfaSessionExpired
 end
 
 function restoreConnection(accountKey)
@@ -996,7 +997,7 @@ end
 
 function submitMfaCode(tanCode)
   if not session.mfaToken then
-    return "MFA-Session abgelaufen. Bitte neu einloggen."
+    return CONSTANTS.mfaSessionExpired
   end
 
   MM.printStatus("MLP: Übermittle MFA...")
