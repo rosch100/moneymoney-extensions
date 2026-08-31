@@ -7,6 +7,8 @@ AccountTypePortfolio = 5
 LoginFailed = "LoginFailed"
 
 local capturedRequests = {}
+local assetAllocationResponse = "ASSETALLOCATION_OK"
+local graphqlResponse = "<!doctype html><html>Not Found</html>"
 
 local importedCookies = "ATC=ok; _abck=abck; PORTSUM_XSRF-TOKEN=token1; portsum_.csrf=token2;"
 
@@ -31,8 +33,10 @@ function Connection()
       end
 
       if url and url:find("picoserver/api/graphql", 1, true) then
-        -- Make GraphQL unusable so RefreshAccount falls back.
-        return "<!doctype html><html>Not Found</html>", nil, "text/html"
+        local mimeType = graphqlResponse:find("<!doctype html", 1, true)
+          and "text/html"
+          or "application/json"
+        return graphqlResponse, nil, mimeType
       end
 
       -- REST fallback for holdings + overall balance:
@@ -41,7 +45,7 @@ function Connection()
         if csrf == "token2" then
           return "<!doctype html><html>Login</html>", nil, "text/html"
         end
-        return "ASSETALLOCATION_OK", nil, "application/json; charset=utf-8"
+        return assetAllocationResponse, nil, "application/json; charset=utf-8"
       end
 
       return "NOTHING", nil
@@ -90,8 +94,49 @@ JSON = function(input)
               cusip = "315911743",
               symbol = "FSMAX",
               name = "Fidelity Extended Market Index Fund",
+              quantity = 10,
+              price = 2206.027,
               marketValue = 22060.27
             }
+          }
+        }
+      end
+      if input == "EMPTY_ASSETALLOCATION" then
+        return {}
+      end
+      if input == "INCOMPLETE_ASSETALLOCATION" then
+        return {
+          overallMarketValue = "100",
+          holdingsDetails = {
+            {accountNum = "2AN338907"}
+          }
+        }
+      end
+      if input == "EMPTY_CUSIP" then
+        return {
+          overallMarketValue = "22060.27",
+          holdingsDetails = {
+            {
+              accountNum = "2AN338907",
+              cusip = "",
+              symbol = "FSMAX",
+              name = "Fidelity Extended Market Index Fund",
+              quantity = 10,
+              price = 2206.027,
+              marketValue = 22060.27
+            }
+          }
+        }
+      end
+      if input == "MISSING_HOLDINGS" then
+        return {
+          overallMarketValue = "100",
+        }
+      end
+      if input == "GRAPHQL_EMPTY" then
+        return {
+          data = {
+            getPosition = {}
           }
         }
       end
@@ -102,6 +147,16 @@ JSON = function(input)
 end
 
 dofile("extensions/Fidelity.lua")
+
+local function assertRefreshFails(account, expectedError, message)
+  local ok, refreshError = pcall(RefreshAccount, account, nil)
+  if ok
+      or type(refreshError) ~= "string"
+      or not refreshError:find(expectedError, 1, true) then
+    print("FAIL: " .. message .. "; actual=" .. tostring(refreshError))
+    os.exit(1)
+  end
+end
 
 -- Cookie import triggers InitializeSession and sets session.cookies.
 local result = InitializeSession(
@@ -137,6 +192,15 @@ if tostring(out.balance) ~= "22060.27" then
   print("FAIL RefreshAccount.balance: expected=22060.27 actual=" .. tostring(out.balance))
   os.exit(1)
 end
+if out.securities[1].isin ~= nil then
+  print("FAIL RefreshAccount.isin: CUSIP must not be exposed as ISIN")
+  os.exit(1)
+end
+if out.securities[1].securityNumber ~= "315911743" then
+  print("FAIL RefreshAccount.securityNumber: expected=315911743 actual="
+    .. tostring(out.securities[1].securityNumber))
+  os.exit(1)
+end
 
 -- Verify fallback endpoint was called.
 local assetCalls = {}
@@ -164,6 +228,37 @@ end
 
 if assetCalls[1].headers["x-csrf-token"] ~= "token1" then
   print("FAIL: asset-allocation call should use PORTSUM_XSRF-TOKEN token1")
+  os.exit(1)
+end
+
+assertRefreshFails(nil, "Kontoabruf",
+  "invalid Fidelity account must raise an explicit refresh error")
+
+assetAllocationResponse = "EMPTY_ASSETALLOCATION"
+assertRefreshFails(account, "Kontostand",
+  "incomplete Fidelity response must raise an explicit balance error")
+
+graphqlResponse = "GRAPHQL_EMPTY"
+assetAllocationResponse = "ASSETALLOCATION_OK"
+local incompleteGraphql = RefreshAccount(account, nil)
+if incompleteGraphql.balance ~= 22060.27 then
+  print("FAIL: incomplete GraphQL data must fall through to validated REST data")
+  os.exit(1)
+end
+
+graphqlResponse = "<!doctype html><html>Not Found</html>"
+assetAllocationResponse = "INCOMPLETE_ASSETALLOCATION"
+assertRefreshFails(account, "unvollständige Position",
+  "incomplete Fidelity holdings must fail the complete refresh")
+
+assetAllocationResponse = "MISSING_HOLDINGS"
+assertRefreshFails(account, "Positionen",
+  "missing Fidelity holdings must fail the complete refresh")
+
+assetAllocationResponse = "EMPTY_CUSIP"
+local emptyCusipPortfolio = RefreshAccount(account, nil)
+if emptyCusipPortfolio.securities[1].securityNumber ~= "FSMAX" then
+  print("FAIL: empty CUSIP must fall back to symbol")
   os.exit(1)
 end
 

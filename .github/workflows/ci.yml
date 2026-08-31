@@ -25,14 +25,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           persist-credentials: false
 
       # Lua 5.4 liegt in der im rockspec geforderten Spanne (>=5.1, <5.5)
       - name: Setup Lua
-        uses: leafo/gh-actions-lua@v12
+        uses: leafo/gh-actions-lua@6919171ccf181b826f44b9bca76307b577217377 # v13.0.0
         with:
           luaVersion: "5.4"
           buildCache: "false"
@@ -40,58 +40,70 @@ jobs:
       - name: Lua unit tests
         run: |
           set -euo pipefail
-          files="$(git ls-files 'tests/*.lua')"
-          if [ -z "${files}" ]; then
+          files_list="$(mktemp)"
+          trap 'rm -f "${files_list}"' EXIT
+          git ls-files -z 'tests/*.lua' > "${files_list}"
+          mapfile -d '' -t files < "${files_list}"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No Lua tests tracked."
             exit 0
           fi
-          while IFS= read -r file; do
+          for file in "${files[@]}"; do
             lua "$file"
-          done <<< "${files}"
+          done
 
       - name: Lua syntax check (all tracked .lua)
         run: |
           set -euo pipefail
-          files="$(git ls-files '*.lua')"
-          if [ -z "${files}" ]; then
+          files_list="$(mktemp)"
+          trap 'rm -f "${files_list}"' EXIT
+          git ls-files -z '*.lua' > "${files_list}"
+          mapfile -d '' -t files < "${files_list}"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No Lua files tracked."
             exit 0
           fi
-          while IFS= read -r file; do
-            lua -e "assert(loadfile('$file'))"
-          done <<< "${files}"
+          for file in "${files[@]}"; do
+            lua -e 'assert(loadfile(arg[1]))' -- "$file"
+          done
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
 
       - name: Python syntax check
         run: |
           set -euo pipefail
-          files="$(git ls-files '*.py')"
-          if [ -z "${files}" ]; then
+          files_list="$(mktemp)"
+          trap 'rm -f "${files_list}"' EXIT
+          git ls-files -z '*.py' > "${files_list}"
+          mapfile -d '' -t files < "${files_list}"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No Python files tracked."
             exit 0
           fi
-          while IFS= read -r file; do
+          for file in "${files[@]}"; do
             python3 -m py_compile "$file"
-          done <<< "${files}"
+          done
 
       - name: Python unit tests (tracked tests/*.py)
         run: |
           set -euo pipefail
-          files="$(git ls-files 'tests/*.py')"
-          if [ -z "${files}" ]; then
+          files_list="$(mktemp)"
+          trap 'rm -f "${files_list}"' EXIT
+          git ls-files -z 'tests/*.py' > "${files_list}"
+          mapfile -d '' -t files < "${files_list}"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No Python tests tracked."
             exit 0
           fi
-          while IFS= read -r f; do
-            python3 "$f"
-          done <<< "${files}"
+          for file in "${files[@]}"; do
+            python3 "$file"
+          done
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
 
@@ -101,12 +113,15 @@ jobs:
       - name: JavaScript parse check (tracked .js)
         run: |
           set -euo pipefail
-          files="$(git ls-files '*.js')"
-          if [ -z "${files}" ]; then
+          files_list="$(mktemp)"
+          trap 'rm -f "${files_list}"' EXIT
+          git ls-files -z '*.js' > "${files_list}"
+          mapfile -d '' -t files < "${files_list}"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No JavaScript files tracked."
             exit 0
           fi
-          while IFS= read -r file; do
+          for file in "${files[@]}"; do
             node --check "$file"
-          done <<< "${files}"
+          done
 

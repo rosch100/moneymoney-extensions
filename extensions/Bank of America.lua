@@ -1361,7 +1361,7 @@ function postSignOnCredentials(username, password, csrfToken)
       reason = reason .. "+html"
     end
     boaDebugLog("Login abgelehnt: " .. reason)
-    return nil, "Benutzername oder Passwort ungültig."
+    return nil, LoginFailed
   end
   if isDirectAccountRedirect(location) then
     boaDebugLog("Login erfolgreich ohne MFA (direct account redirect)")
@@ -1373,7 +1373,7 @@ function postSignOnCredentials(username, password, csrfToken)
   if not isSignOnSuccessRedirect(location) then
     if isSignOnCredentialErrorPage(response) then
       boaDebugLog("Login abgelehnt: credential-error-page ohne Location-Header")
-      return nil, "Benutzername oder Passwort ungültig."
+      return nil, LoginFailed
     end
     boaDebugLog("Login fehlgeschlagen: unerwartete Antwort/Weiterleitung")
     return nil, "Login fehlgeschlagen (unerwartete Weiterleitung)."
@@ -1937,7 +1937,8 @@ function ListAccounts(knownAccounts)
       displayName = displayName:gsub("^%s*", ""):gsub("%s*$", "")
 
       local accountType = AccountTypeGiro
-      if displayName:lower():find("card") or displayName:lower():find("credit") or response:find("/card/") then
+      if displayName:lower():find("card") or displayName:lower():find("credit")
+          or accountSection:find("/card/") then
         accountType = AccountTypeCreditCard
       end
 
@@ -1963,36 +1964,58 @@ function ListAccounts(knownAccounts)
   end
   
   if #accounts == 0 then
+    local fallbackNumbers = {}
     for num in response:gmatch("Ending in%s+(%d%d%d%d)") do
-      local maskedNum = num
-      local displayName = "BoA Account *" .. maskedNum
-      
-      local alreadyExists = false
-      for _, acc in ipairs(accounts) do if acc.accountNumber == maskedNum then alreadyExists = true; break end end
-      
-      if not alreadyExists then
-        table.insert(accounts, {
-          name = displayName,
-          accountNumber = maskedNum,
-          bankCode = CONSTANTS.bankCode,
-          currency = "USD",
-          type = AccountTypeGiro,
-          attributes = { "statements" }
-        })
+      fallbackNumbers[num] = true
+    end
+
+    local maskedNum
+    local fallbackCount = 0
+    for num in pairs(fallbackNumbers) do
+      maskedNum = num
+      fallbackCount = fallbackCount + 1
+    end
+
+    if fallbackCount == 1 then
+      local marker = "Ending in " .. maskedNum
+      local markerPosition = response:find(marker, 1, true)
+      local context = response
+      if markerPosition then
+        local contextStart = 1
+        for position in response:sub(1, markerPosition):gmatch("()(<div)") do
+          contextStart = position
+        end
+        local contextEnd = response:find("</div>", markerPosition, true)
+        context = response:sub(contextStart, contextEnd or #response)
       end
+      local responseLower = context:lower()
+      local accountType
+      if responseLower:find("credit card", 1, true) or responseLower:find("/card/", 1, true) then
+        accountType = AccountTypeCreditCard
+      elseif responseLower:find("checking", 1, true) then
+        accountType = AccountTypeGiro
+      elseif responseLower:find("savings", 1, true) then
+        accountType = AccountTypeSavings
+      end
+      if not accountType then
+        return "Bank of America: Kontotyp konnte nicht eindeutig ermittelt werden."
+      end
+
+      table.insert(accounts, {
+        name = "BoA Account *" .. maskedNum,
+        accountNumber = maskedNum,
+        bankCode = CONSTANTS.bankCode,
+        currency = "USD",
+        type = accountType,
+        attributes = { "statements" }
+      })
+    elseif fallbackCount > 1 then
+      return "Bank of America: Mehrere Konten konnten nicht eindeutig klassifiziert werden."
     end
   end
   
-  -- Final fallback if still no accounts found
   if #accounts == 0 then
-    table.insert(accounts, {
-      name = "BoA Account (needs manual setup)",
-      accountNumber = "0000",
-      bankCode = CONSTANTS.bankCode,
-      currency = "USD",
-      type = AccountTypeGiro,
-      attributes = { "statements" }
-    })
+    return "Bank of America: Keine Konten in der Serverantwort gefunden."
   end
 
   return accounts
@@ -2127,7 +2150,41 @@ local function timeFromYmd(yearValue, monthValue, dayValue)
   if not year or not month or not day then
     error("Invalid numeric date components")
   end
-  return os.time({year = year, month = month, day = day})
+  local timestamp = os.time({year = year, month = month, day = day})
+  local normalized = timestamp and os.date("*t", timestamp)
+  if type(normalized) ~= "table"
+      or normalized.year ~= year
+      or normalized.month ~= month
+      or normalized.day ~= day then
+    return nil
+  end
+  return timestamp
+end
+
+local function parseTransactionDate(dateString)
+  if type(dateString) ~= "string" then
+    return nil, false
+  end
+
+  local normalized = dateString:gsub("^%s*", ""):gsub("%s*$", "")
+  local isPending = normalized:lower():find("pending", 1, true) ~= nil
+  if isPending then
+    local now = os.date("*t")
+    return os.time({
+      year = now.year,
+      month = now.month,
+      day = now.day,
+      hour = 0,
+      min = 0,
+      sec = 0
+    }), true
+  end
+
+  local month, day, year = normalized:match("(%d%d)/(%d%d)/(%d%d%d%d)")
+  if not month or not day or not year then
+    return nil, false
+  end
+  return timeFromYmd(year, month, day), false
 end
 
 local function parseTransactionRow(row, sinceTimestamp)
@@ -2209,33 +2266,25 @@ local function parseTransactionRow(row, sinceTimestamp)
                 amountSection:match('>%s*(%$[%d%.,]+)%s*<')
   end
 
-  if not desc or desc == "" or not amountStr then
-    return nil
+  if not desc or desc == "" then
+    error("Bank of America: Umsatzbeschreibung fehlt.")
+  end
+  if not amountStr then
+    error("Bank of America: Umsatzbetrag fehlt oder ist ungültig.")
   end
 
   desc = desc:gsub("^%s*", ""):gsub("%s*$", "")
 
-  local amount = 0
   local isNegativeInHtml = amountStr:match("^%s*%-") or amountStr:match("%-%$")
   local cleanAmountStr = amountStr:gsub("%$", ""):gsub(",", "")
-  amount = tonumber((cleanAmountStr)) or 0
+  local amount = tonumber(cleanAmountStr)
+  if not amount then
+    error("Bank of America: Umsatzbetrag fehlt oder ist ungültig.")
+  end
 
-  local bookingDate = os.time()
-  local valutaDate = os.time()
-
-  if dateStr then
-    dateStr = dateStr:gsub("^%s*", ""):gsub("%s*$", "")
-    if dateStr == "Pending" or dateStr:lower():match('pending') then
-      local now = os.date("*t")
-      bookingDate = os.time({year = now.year, month = now.month, day = now.day, hour = 0, min = 0, sec = 0})
-      valutaDate = bookingDate
-    else
-      mm, dd, yyyy = dateStr:match("(%d%d)/(%d%d)/(%d%d%d%d)")
-      if mm and dd and yyyy then
-        bookingDate = timeFromYmd(yyyy, mm, dd)
-        valutaDate = bookingDate
-      end
-    end
+  local bookingDate, isPending = parseTransactionDate(dateStr)
+  if not bookingDate then
+    error("Bank of America: Umsatzdatum fehlt oder ist ungültig.")
   end
 
   local transType = nil
@@ -2272,7 +2321,7 @@ local function parseTransactionRow(row, sinceTimestamp)
   end
 
   if sinceTimestamp and bookingDate < sinceTimestamp then
-    if dateStr ~= "Pending" and not dateStr:lower():match('pending') then
+    if not isPending then
       return nil
     end
   end
@@ -2281,10 +2330,11 @@ local function parseTransactionRow(row, sinceTimestamp)
 
   return {
     bookingDate = bookingDate,
-    valutaDate = valutaDate,
+    valueDate = bookingDate,
     purpose = desc,
     amount = amount,
     currency = "USD",
+    booked = not isPending,
     _detailUrl = detailUrl
   }
 end
@@ -2357,11 +2407,11 @@ end
 
 function RefreshAccount(account, since)
   if not account or not account.accountNumber then
-    return { balance = 0, transactions = {} }
+    error("Bank of America: Kontoabruf ohne Kontonummer nicht möglich.")
   end
 
   if not session.cookies or session.cookies == "" then
-    return { balance = 0, transactions = {} }
+    error("Bank of America: Kontoabruf ohne aktive Sitzung nicht möglich.")
   end
 
   local sinceTimestamp = since
@@ -2382,21 +2432,27 @@ function RefreshAccount(account, since)
   )
   
   if not firstPageResponse then
-    return { balance = 0, transactions = {} }
+    error("Bank of America: Keine Serverantwort beim Kontoabruf.")
+  end
+  if not isAuthenticatedAccountPage(firstPageResponse) then
+    error("Bank of America: Kontoabruf lieferte keine authentifizierte Kontoseite.")
   end
 
   rememberStatementPageUrl(firstPageResponse, session.adxToken)
 
-  local balance = 0
   local balStr = firstPageResponse:match('[Ss]tatement [Bb]alance:.-TL_NPI_L1">%$?([%d%.,]+)') or
                  firstPageResponse:match('[Cc]urrent [Bb]alance:.-TL_NPI_L1">%$?([%d%.,]+)') or
                  firstPageResponse:match('[Tt]otal [Cc]redit [Aa]vailable:.-TL_NPI_L1">%$?([%d%.,]+)')
-  
-  if balStr then
-    balance = tonumber((balStr:gsub(",", ""))) or 0
-    if account.type == AccountTypeCreditCard and firstPageResponse:lower():find("statement balance") then
-      balance = -balance
-    end
+
+  if not balStr then
+    error("Bank of America: Kontostand fehlt in der Serverantwort.")
+  end
+  local balance = tonumber((balStr:gsub(",", "")))
+  if not balance then
+    error("Bank of America: Kontostand hat ein ungültiges Format.")
+  end
+  if account.type == AccountTypeCreditCard and firstPageResponse:lower():find("statement balance") then
+    balance = -balance
   end
 
   local adxToken = firstPageResponse:match('adx=["\']?([0-9a-f]+)') or 
@@ -2450,11 +2506,21 @@ local function resolveAdxToken(adxToken)
   return adxToken
 end
 
+local function parseStatementDate(dateString)
+  if type(dateString) ~= "string" then
+    return nil
+  end
+  local year, month, day = dateString:match("(%d%d%d%d)-(%d%d)-(%d%d)")
+  if not year or not month or not day then
+    return nil
+  end
+  return timeFromYmd(year, month, day)
+end
+
 local function appendParsedStatement(statements, seenDocIds, docId, docName, dateStr, adxToken, sinceTimestamp)
-  local y, m, d = dateStr:match("(%d%d%d%d)-(%d%d)-(%d%d)")
-  local bookingDate = os.time()
-  if y and m and d then
-    bookingDate = timeFromYmd(y, m, d)
+  local bookingDate = parseStatementDate(dateStr)
+  if not bookingDate then
+    error("Bank of America: Auszugsdatum fehlt oder hat ein ungültiges Format.")
   end
 
   if sinceTimestamp and bookingDate < sinceTimestamp then
@@ -2481,9 +2547,25 @@ local function parseStatementsFromGatherResponse(jsonResponse, adxToken, sinceTi
   end
 
   local documentList = jsonResponse:match('"documentList"%s*:%s*(%b[])')
+    or jsonResponse:match('"documents"%s*:%s*(%b[])')
   local searchText = documentList or jsonResponse
-  for docId, docName, dateStr in searchText:gmatch('"docId"%s*:%s*"([^"]+)"[^}]-"docDisplayName"%s*:%s*"([^"]+)"[^}]-"date"%s*:%s*"([^"]+)"') do
-    appendParsedStatement(statements, seenDocIds, docId, docName, dateStr, adxToken, sinceTimestamp)
+  for document in searchText:gmatch("(%b{})") do
+    local docId = document:match('"docId"%s*:%s*"([^"]+)"')
+    local docName = document:match('"docDisplayName"%s*:%s*"([^"]+)"')
+    local dateStr = document:match('"date"%s*:%s*"([^"]+)"')
+    if docId or docName or dateStr then
+      if not docId or not docName or not dateStr then
+        error("Bank of America: Auszugsdokument ist unvollständig.")
+      end
+      appendParsedStatement(
+        statements,
+        seenDocIds,
+        docId,
+        docName,
+        dateStr,
+        adxToken,
+        sinceTimestamp)
+    end
   end
 end
 
@@ -2541,14 +2623,11 @@ local function buildKnownIdentifierSet(knownIdentifiers)
 end
 
 local function parseStatementCreationDate(periodEnd)
-  if not periodEnd then
-    return os.time()
+  local creationDate = parseStatementDate(periodEnd)
+  if not creationDate then
+    error("Bank of America: Auszugsdatum fehlt oder hat ein ungültiges Format.")
   end
-  local y, m, d = periodEnd:match("(%d%d%d%d)-(%d%d)-(%d%d)")
-  if y and m and d then
-    return timeFromYmd(y, m, d)
-  end
-  return os.time()
+  return creationDate
 end
 
 local function downloadStatementPdf(docId, adxToken)

@@ -28,6 +28,7 @@ const fidelity = banks.fidelity;
 const mlp = banks.mlp;
 
 assert.equal(detectBank('digital.fidelity.com', banks)?.id, 'fidelity');
+assert.equal(detectBank('untrusted.fidelity.com', banks), null);
 assert.equal(detectBank('unknown.example', banks), null);
 
 const formatted = formatCookieExport(
@@ -106,5 +107,70 @@ const domainFailResult = await collectCookies(domainDeniedApi, {
 });
 assert.equal(domainFailResult.cookies.length, 0);
 assert.deepEqual(domainFailResult.failedOrigins, ['https://digital.fidelity.com']);
+
+const partialDomainDeniedApi = {
+  cookies: {
+    getAll: async (details) => {
+      if ('domain' in details) {
+        throw new Error('domain query denied');
+      }
+      return [{
+        name: 'ATC',
+        value: 'partial',
+        domain: '.fidelity.com',
+        path: '/',
+        storeId: '0',
+      }];
+    },
+  },
+};
+const partialDomainFailResult = await collectCookies(partialDomainDeniedApi, {
+  ...fidelity,
+  origins: ['https://digital.fidelity.com'],
+});
+assert.equal(partialDomainFailResult.cookies.length, 1);
+assert.deepEqual(
+  partialDomainFailResult.failedOrigins,
+  ['https://digital.fidelity.com'],
+);
+assert.equal(
+  exportBlockReason(
+    partialDomainFailResult.cookies,
+    missingCritical(partialDomainFailResult.cookies, fidelity),
+    partialDomainFailResult.failedOrigins,
+  ),
+  'missing',
+);
+
+const partialUrlDeniedApi = {
+  cookies: {
+    getAll: async (details) => {
+      if ('url' in details) {
+        throw new Error('url query denied');
+      }
+      return [
+        { name: 'ATC', value: '1', domain: '.fidelity.com', path: '/' },
+        { name: '_abck', value: '2', domain: '.fidelity.com', path: '/' },
+      ];
+    },
+  },
+};
+const partialUrlFailResult = await collectCookies(partialUrlDeniedApi, {
+  ...fidelity,
+  origins: ['https://digital.fidelity.com'],
+});
+assert.equal(partialUrlFailResult.cookies.length, 2);
+assert.deepEqual(
+  partialUrlFailResult.failedOrigins,
+  ['https://digital.fidelity.com'],
+);
+assert.equal(
+  exportBlockReason(
+    partialUrlFailResult.cookies,
+    missingCritical(partialUrlFailResult.cookies, fidelity),
+    partialUrlFailResult.failedOrigins,
+  ),
+  'partial',
+);
 
 console.log('ALL COOKIE EXPORT JS TESTS PASSED');

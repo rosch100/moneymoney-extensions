@@ -233,8 +233,9 @@ def sync_safari_resources() -> tuple[list[str], list[str]]:
 
 
 def assert_safari_resources_synced() -> None:
-    expected = {str(path.relative_to(BROWSER)) for path in shared_browser_files()}
-    for browser_path in shared_browser_files():
+    browser_paths = shared_browser_files()
+    expected = {str(path.relative_to(BROWSER)) for path in browser_paths}
+    for browser_path in browser_paths:
         rel = browser_path.relative_to(BROWSER)
         safari_path = SAFARI_RES / rel
         assert_true(browser_path.is_file(), f"fehlt: {browser_path}")

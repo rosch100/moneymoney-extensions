@@ -19,6 +19,28 @@ local CONSTANTS = {
   bankCode = "255073345"
 }
 
+local CREDENTIAL_REJECTION_MARKERS = {
+  "incorrect password",
+  "invalid user id or password",
+  "invalid username or password",
+  "wrong password",
+  "falsches passwort",
+  "passwort ist falsch",
+  "ungültige anmeldedaten",
+  "ungueltige anmeldedaten"
+}
+
+local ACCOUNT_TYPES = {
+  checking = AccountTypeGiro,
+  savings = AccountTypeSavings,
+  credit = AccountTypeCreditCard,
+  card = AccountTypeCreditCard,
+  loan = AccountTypeLoan,
+  mortgage = AccountTypeLoan,
+  investment = AccountTypeSecurities,
+  brokerage = AccountTypeSecurities
+}
+
 local connection
 local session = {}
 
@@ -75,17 +97,7 @@ local function isCredentialRejectionMessage(message)
     return false
   end
   local lower = message:lower()
-  local markers = {
-    "incorrect password",
-    "invalid user id or password",
-    "invalid username or password",
-    "wrong password",
-    "falsches passwort",
-    "passwort ist falsch",
-    "ungültige anmeldedaten",
-    "ungueltige anmeldedaten"
-  }
-  for _, marker in ipairs(markers) do
+  for _, marker in ipairs(CREDENTIAL_REJECTION_MARKERS) do
     if lower:find(marker, 1, true) then
       return true
     end
@@ -1245,14 +1257,17 @@ function buildMaskedAccountSuffix(actualNumber, displayAccountNumber)
   if type(displayAccountNumber) == "string" and displayAccountNumber ~= "" then
     return displayAccountNumber
   end
-  if actualNumber ~= "unknown" and #actualNumber >= 4 then
+  if type(actualNumber) == "string" and #actualNumber >= 4 then
     return "*" .. actualNumber:sub(-4)
   end
-  return "*XXXX"
+  return nil
 end
 
 function buildWebsiteAccountLabel(acc, actualNumber, displayAccountNumber)
   local masked = buildMaskedAccountSuffix(actualNumber, displayAccountNumber)
+  if not masked then
+    return nil
+  end
   local nickname = trim(acc.nickname or "")
   if nickname == "" then
     nickname = trim(acc.description or "")
@@ -1263,26 +1278,39 @@ function buildWebsiteAccountLabel(acc, actualNumber, displayAccountNumber)
   return masked
 end
 
-function buildAccountNumberForMoneyMoney(acc, actualNumber, displayAccountNumber)
-  return buildWebsiteAccountLabel(acc, actualNumber, displayAccountNumber)
-end
-
 function parseAccounts(accountsResponse)
   local accounts = {}
 
   for _, acc in ipairs(accountsResponse) do
     local actualNumber = extractAccountNumber(acc.accountNumber)
-    local accountNumber = buildAccountNumberForMoneyMoney(acc, actualNumber, acc.displayAccountNumber)
-    local accountName = acc.nickname or acc.description or "Presidential Account"
+    if not actualNumber then
+      error("Presidential Bank: Kontonummer fehlt in der Serverantwort.")
+    end
+    local accountNumber = buildWebsiteAccountLabel(acc, actualNumber, acc.displayAccountNumber)
+    if not accountNumber then
+      error("Presidential Bank: Kontonummer ist unvollständig.")
+    end
+    local accountName = acc.nickname or acc.description
+    if type(accountName) ~= "string" or trim(accountName) == "" then
+      error("Presidential Bank: Kontoname fehlt in der Serverantwort.")
+    end
+    local accountType = mapAccountType(acc.accountType or acc.category)
+    if not accountType then
+      error("Presidential Bank: Kontotyp fehlt oder ist unbekannt.")
+    end
+    local balance = tonumber(acc.balance)
+    if balance == nil then
+      balance = tonumber(acc.availableBalance)
+    end
 
     table.insert(accounts, {
       name = accountName,
       accountNumber = accountNumber,
       bankCode = CONSTANTS.bankCode,
       currency = "USD",
-      type = mapAccountType(acc.accountType or acc.category),
+      type = accountType,
       _internalId = acc.id,
-      _balance = acc.balance or acc.availableBalance or 0
+      _balance = balance
     })
   end
 
@@ -1291,45 +1319,36 @@ end
 
 function extractAccountNumber(accountNumber)
   if type(accountNumber) == "table" then
-    return accountNumber.hostValue or accountNumber.displayValue or "unknown"
-  elseif type(accountNumber) == "string" then
+    local value = accountNumber.hostValue or accountNumber.displayValue
+    if type(value) == "string" and value ~= "" then
+      return value
+    end
+  elseif type(accountNumber) == "string" and accountNumber ~= "" then
     return accountNumber
   end
-  return "unknown"
+  return nil
 end
 
 function mapAccountType(accountType)
-  if not accountType then
-    return AccountTypeGiro
+  if type(accountType) ~= "string" then
+    return nil
   end
 
-  local typeMap = {
-    checking = AccountTypeGiro,
-    savings = AccountTypeSavings,
-    credit = AccountTypeCreditCard,
-    card = AccountTypeCreditCard,
-    loan = AccountTypeLoan,
-    mortgage = AccountTypeLoan,
-    investment = AccountTypeSecurities,
-    brokerage = AccountTypeSecurities
-  }
-
-  local mapped = typeMap[accountType:lower():match("^(%a+)")]
-  return mapped or AccountTypeGiro
+  return ACCOUNT_TYPES[accountType:lower():match("^(%a+)")]
 end
 
 function RefreshAccount(account, since)
   if not account then
-    return { balance = 0, transactions = {} }
+    error("Presidential Bank: Kontoabruf ohne Konto nicht möglich.")
   end
 
   if not hasValidSession() then
-    return { balance = 0, transactions = {} }
+    error("Presidential Bank: Kontoabruf ohne aktive Sitzung nicht möglich.")
   end
 
-  local accountId = resolveAccountId(account)
+  local accountId, discoveredBalance = resolveAccountId(account)
   if not accountId then
-    return { balance = 0, transactions = {} }
+    error("Presidential Bank: Interne Kontokennung für den Kontoabruf fehlt.")
   end
 
   local startDate, endDate = calculateDateRange(since)
@@ -1339,20 +1358,24 @@ function RefreshAccount(account, since)
   updateCookies()
 
   if not response then
-    return { balance = 0, transactions = {} }
+    error("Presidential Bank: Keine Serverantwort beim Kontoabruf.")
   end
 
   local data = parseJson(response)
   if not data or not data.transactionsresponse then
-    return { balance = 0, transactions = {} }
+    error("Presidential Bank: Ungültige Serverantwort beim Kontoabruf.")
   end
 
-  return parseTransactions(data.transactionsresponse)
+  local accountBalance = account._balance
+  if accountBalance == nil then
+    accountBalance = discoveredBalance
+  end
+  return parseTransactions(data.transactionsresponse, accountBalance)
 end
 
 function resolveAccountId(account)
-  if account._internalId and account._internalId ~= "" then
-    return account._internalId
+  if isValidAccountId(account._internalId) then
+    return account._internalId, account._balance
   end
 
   local discovered = ListAccounts({})
@@ -1360,23 +1383,25 @@ function resolveAccountId(account)
     return nil
   end
 
+  local matches = {}
   for _, acc in ipairs(discovered) do
-    if acc.accountNumber == account.accountNumber then
-      return acc._internalId
-    end
-    if acc._internalId == account.accountNumber then
-      return acc._internalId
-    end
-    if acc.name == account.name and acc.name ~= "" then
-      return acc._internalId
+    local numberMatches = type(account.accountNumber) == "string"
+      and account.accountNumber ~= ""
+      and (acc.accountNumber == account.accountNumber
+        or acc._internalId == account.accountNumber)
+    local nameMatches = (account.accountNumber == nil or account.accountNumber == "")
+      and type(account.name) == "string"
+      and account.name ~= ""
+      and acc.name == account.name
+    if (numberMatches or nameMatches) and isValidAccountId(acc._internalId) then
+      matches[#matches + 1] = acc
     end
   end
 
-  if #discovered == 1 then
-    return discovered[1]._internalId
+  if #matches ~= 1 then
+    return nil
   end
-
-  return nil
+  return matches[1]._internalId, matches[1]._balance
 end
 
 function isValidAccountId(accountId)
@@ -1419,36 +1444,56 @@ function buildTransactionsUrl(accountId, startDate, endDate)
   return url
 end
 
-function parseTransactions(transactionsResponse)
-  local balance = 0
+function parseTransactions(transactionsResponse, accountBalance)
+  local balance = tonumber(accountBalance)
   local transactions = {}
 
   for _, tx in ipairs(transactionsResponse) do
-    local txAmount = tonumber(tx.amount) or 0
-    local isCredit = tx.creditTransaction or false
-    local txType = tx.transactionType or ""
+    local txAmount = tonumber(tx.amount)
+    if not txAmount then
+      error("Presidential Bank: Umsatzbetrag fehlt oder ist ungültig.")
+    end
+    local isCredit = tx.creditTransaction
+    local txType = type(tx.transactionType) == "string" and tx.transactionType:lower() or ""
 
-    if txType:lower() == "withdrawal" or txType:lower() == "debit" or isCredit == false then
+    if txType == "withdrawal" or txType == "debit" then
       txAmount = -math.abs(txAmount)
-    else
+    elseif txType == "deposit" or txType == "credit" then
       txAmount = math.abs(txAmount)
+    elseif type(isCredit) ~= "boolean" then
+      error("Presidential Bank: Umsatzrichtung fehlt oder ist unbekannt.")
+    elseif isCredit then
+      txAmount = math.abs(txAmount)
+    else
+      txAmount = -math.abs(txAmount)
     end
 
-    if tx.ledgerBalance then
-      balance = tonumber(tx.ledgerBalance) or balance
+    if balance == nil and tx.ledgerBalance then
+      local ledgerBalance = tonumber(tx.ledgerBalance)
+      if not ledgerBalance then
+        error("Presidential Bank: Kontostand hat ein ungültiges Format.")
+      end
+      balance = ledgerBalance
     end
 
     local name, purpose = parseTransactionDescription(tx.generatedDescription or "")
+    local transactionDate = parseDate(tx.transactionDate)
+    if not transactionDate then
+      error("Presidential Bank: Umsatzdatum fehlt oder ist ungültig.")
+    end
 
     table.insert(transactions, {
-      bookingDate = parseDate(tx.transactionDate),
-      valueDate = parseDate(tx.transactionDate),
+      bookingDate = transactionDate,
+      valueDate = transactionDate,
       amount = txAmount,
       purpose = purpose,
       name = name
     })
   end
 
+  if balance == nil then
+    error("Presidential Bank: Kontostand fehlt in der Serverantwort.")
+  end
   return { balance = balance, transactions = transactions }
 end
 
@@ -1641,7 +1686,14 @@ function parseDate(dateStr)
   if year and month and day then
     local parsedYear, parsedMonth, parsedDay = tonumber(year), tonumber(month), tonumber(day)
     if parsedYear and parsedMonth and parsedDay then
-      return os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+      local timestamp = os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+      local normalized = timestamp and os.date("*t", timestamp)
+      if type(normalized) == "table"
+          and normalized.year == parsedYear
+          and normalized.month == parsedMonth
+          and normalized.day == parsedDay then
+        return timestamp
+      end
     end
   end
 
@@ -1650,7 +1702,14 @@ function parseDate(dateStr)
   if month and day and year then
     local parsedYear, parsedMonth, parsedDay = tonumber(year), tonumber(month), tonumber(day)
     if parsedYear and parsedMonth and parsedDay then
-      return os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+      local timestamp = os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+      local normalized = timestamp and os.date("*t", timestamp)
+      if type(normalized) == "table"
+          and normalized.year == parsedYear
+          and normalized.month == parsedMonth
+          and normalized.day == parsedDay then
+        return timestamp
+      end
     end
   end
 
