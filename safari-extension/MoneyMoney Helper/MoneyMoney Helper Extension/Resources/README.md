@@ -39,7 +39,7 @@ Danach in Xcode:
 1. `safari-extension/MoneyMoney Helper/MoneyMoney Helper.xcodeproj` öffnen
 2. Signing → Team auswählen (Apple-ID reicht für lokale Entwicklung)
 3. **Ziel/Destination:** `My Mac` (in der Xcode-Toolbar neben dem Scheme „MoneyMoney Helper“)
-4. **Product → Run** (⌘R) — startet Safari mit temporärer Extension
+4. **Product → Run** (⌘R) — baut und startet die Hüllen-App
 5. Safari → **Einstellungen → Erweiterungen** → MoneyMoney Helper aktivieren
 
 > Fehler *„Please select an available device…“* → Destination oben in Xcode auf **My Mac** stellen (nicht iPhone/iOS-Simulator).
@@ -73,17 +73,18 @@ erfolgt manuell.
 | `cookie-export.js` | Sammeln, Formatieren, Validierung |
 | `popup.js` | UI-Logik |
 
-Icons: `python3 scripts/generate-extension-icons.py`
+Die Icons liegen bereits unter `browser-extension/icons/` und werden vom
+Xcode-Projekt als Ressourcen verwendet.
 
 ## Berechtigungen (Minimalprinzip)
 
 - `cookies` — lesen (kein Schreiben)
-- `host_permissions` — konkrete Origins aus `cookie-export-banks.json` (keine `*.domain`-Wildcards; Safari 27 crasht sonst in Websites Preferences); Cookie-Abfrage nur über diese Origins
+- `host_permissions` — konkrete Origins aus `cookie-export-banks.json` (keine `*.domain`-Wildcards; Safari 26 und neuer crasht sonst in Websites Preferences); Cookie-Abfrage nur über diese Origins
 - Kein `activeTab`, kein `clipboardWrite` (Clipboard via Nutzerklick im Popup)
 
 **Neue Bank oder Subdomain:** Jede Hostname, von der Session-Cookies gelesen werden müssen, braucht einen eigenen `https://`-Eintrag in `origins` (und damit in `host_permissions`). `session_host` muss in `origins` enthalten sein. Danach `python3 scripts/sync_safari_extension_resources.py` ausführen.
 
-### Safari / macOS 27
+### Safari / macOS 26 und neuer
 
 Extension in **Safari → Einstellungen → Erweiterungen** aktivieren. **„Websites bearbeiten“ / Edit Websites** nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar auf der Bank-Seite erlauben.
 
@@ -104,4 +105,5 @@ python3 tests/test_browser_extension_manifest.py
 python3 tests/test_cookie_export_config.py
 node tests/test_cookie_export.mjs
 python3 tests/test_external_scripts_conformance.py
+python3 tests/test_workflow_security.py
 ```

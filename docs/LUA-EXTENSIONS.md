@@ -43,7 +43,8 @@ WebBanking{
 | Login | `COOKIE:SMSESSION=…;SSOTOKEN=…` |
 | Konten-`bankCode` | `BOA` |
 
-**Cookie-Export:** Kontoübersicht im Browser → `python3 scripts/extract-boa-cookies.py login.har`
+**Cookie-Export:** Kontoübersicht im Browser → `python3 scripts/extract-boa-cookies.py login.har`.
+Erforderlich sind `SMSESSION`, `SSOTOKEN` und `LSESSIONID`.
 
 **Session:** `LocalStorage.connection` und `LocalStorage.connectionAccountKey`;
 `verifyActiveSession` prüft eine persistierte Session vor einem erneuten
@@ -79,7 +80,7 @@ WebBanking{
 | Feld | Wert |
 |------|------|
 | Kontotyp | `AccountTypePortfolio` |
-| Login | `COOKIE:ATC=…;ET=…;…`; für den Export sind `ATC` und Akamai-Cookie `_abck` kritisch |
+| Login | `COOKIE:_abck=…;bm_sz=…;ATC=…;ET=…;SESSION_SCTX=…;PIT=…;…` |
 | Session | `LocalStorage.connection` und `LocalStorage.connectionAccountKey` |
 
 Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
@@ -95,6 +96,8 @@ Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 Für den Holdings-Abruf werden je nach Fidelity-Antwort außerdem CSRF-Cookies
 wie `PORTSUM_XSRF-TOKEN` oder `portsum_.csrf` benötigt. Weitere Sessioncookies
 wie `FC`, `RC`, `SC`, `MC`, `ATT` und `bm_*` nimmt der Cookie-Export mit.
+Für den Export gelten `_abck`, `bm_sz`, `ATC`, `ET`, `SESSION_SCTX` und `PIT`
+als kritisch.
 
 ---
 
@@ -161,6 +164,7 @@ WebBanking{
 `InitializeSession2` bietet SMS, E-Mail, Voice und TOTP an. Für einen
 Cookie-Import sind `SESSION_TOKEN` und `rftoken` verpflichtend; `CSRFToken`
 kann zusätzlich enthalten sein.
+HAR-Export: `python3 scripts/extract-presidential-cookies.py login.har`.
 
 **Session:** `LocalStorage.presidentialSessionCookies`,
 `presidentialRftoken`, `presidentialCsrfToken`,
@@ -207,6 +211,7 @@ Benutzername mit Pipe-Suffix für Background-Sync:
 `name|TT.MM.JJJJ`, `name|TT/MM/JJJJ` oder `name|TT-MM-JJJJ`.
 Fallback: `COOKIE:FedAuth=…`. Shareview ist nicht in MoneyMoney Helper
 konfiguriert; das FedAuth-Cookie muss deshalb manuell importiert werden.
+HAR-Export: `python3 scripts/extract-shareview-cookies.py login.har`.
 
 ### API-Funktionen
 
