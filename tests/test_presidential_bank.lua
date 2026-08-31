@@ -54,6 +54,19 @@ end
 -- Load extension (defines globals we test)
 dofile("extensions/Presidential Bank.lua")
 
+do
+  local oldConnection = Connection()
+  LocalStorage = {
+    connection = oldConnection,
+    connectionAccountKey = "user@example.com"
+  }
+  _G.resetStaleSessionForFreshLogin(LocalStorage, "user@example.com")
+  assert(LocalStorage.connection ~= oldConnection,
+    "stale session must use a fresh connection for credential login")
+  assert(LocalStorage.connectionAccountKey == "user@example.com",
+    "fresh login must preserve the account key")
+end
+
 -- normalizeWhitespace
 assertEq(normalizeWhitespace("  a   b  "), "a b", "normalizeWhitespace.compress")
 assertEq(normalizeWhitespace("   "), "", "normalizeWhitespace.trim-empty")

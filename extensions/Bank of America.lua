@@ -1,12 +1,12 @@
 --
--- Bank of America — MoneyMoney Web Banking Extension (Beta 0.9, Cookie-Import)
+-- Bank of America — MoneyMoney Web Banking Extension (Beta 0.91, Cookie-Import)
 -- https://www.bankofamerica.com
 -- Dokumentation: docs/LUA-EXTENSIONS.md
 -- API: https://moneymoney.app/api/webbanking/
 --
 
 WebBanking{
-  version     = 0.90,
+  version     = 0.91,
   url         = "https://secure.bankofamerica.com",
   services    = {"Bank of America"},
   description = "Bank of America — Beta (Cookie-Import)"
@@ -1714,8 +1714,8 @@ function directLoginUnavailableMessage()
 end
 
 function performPasswordLogin(username, password)
-  boaDebugLog("Direct-Login blockiert: Browser-Fingerprint erforderlich")
-  return directLoginUnavailableMessage()
+  boaDebugLog("Direct-Login: Starte Sparta-Authentifizierung")
+  return performSpartaPasswordLogin(username, password)
 end
 
 function performSpartaPasswordLogin(username, password)

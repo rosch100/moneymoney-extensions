@@ -7,7 +7,7 @@
 --
 
 WebBanking{
-  version     = 1.00,
+  version     = 1.01,
   url         = "https://portfolio.shareview.co.uk",
   services    = {"Shareview"},
   description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA)"

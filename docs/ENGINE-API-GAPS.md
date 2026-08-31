@@ -1,4 +1,4 @@
-# Offene Punkte für Direct-Login (Beta 0.9)
+# Offene Punkte für Direct-Login
 
 Cookie-Import funktioniert. Für Username/Passwort-Login in Lua fehlen Engine-Erweiterungen.
 

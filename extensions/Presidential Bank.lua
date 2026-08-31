@@ -6,7 +6,7 @@
 --
 
 WebBanking{
-  version     = 1.00,
+  version     = 1.01,
   url         = "https://www.presidentialpcbanking.com",
   services    = {"Presidential Bank"},
   description = "Presidential Bank - MFA and Cookie Import"
@@ -757,6 +757,17 @@ function clearPersistedSessionStorage(storage)
   storage.presidentialLoginComplete = nil
 end
 
+function resetStaleSessionForFreshLogin(storage, accountKey)
+  connection = Connection()
+  connection.language = "en-US"
+  connection.useragent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+  session = {}
+  if storage then
+    storage.connection = connection
+    storage.connectionAccountKey = accountKey
+  end
+end
+
 function canRestorePersistedSession(storage, accountKey)
   local saved = getPersistedSessionSnapshot(storage)
   if not saved then
@@ -858,6 +869,7 @@ function tryVerifyPersistedSession(storage, accountKey)
   end
 
   clearPersistedSessionStorage(storage)
+  resetStaleSessionForFreshLogin(storage, accountKey)
   return false
 end
 

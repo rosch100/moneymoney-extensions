@@ -6,8 +6,8 @@ Engine-Spezifikation: [MoneyMoney Web Banking API](https://moneymoney.app/api/we
 
 | Version | Bedeutung |
 |---------|-----------|
-| **0.9 / 0.91** | Beta — Cookie-Import ist der unterstützte Anmeldeweg |
-| **1.0** | Direct-Login mit MFA (optional Cookie-Import als Fallback) |
+| **0.91 / 0.92** | Beta — Cookie-Import ist der unterstützte Anmeldeweg |
+| **1.01** | Direct-Login mit MFA (optional Cookie-Import als Fallback) |
 
 ## Engine-Ablauf
 
@@ -20,7 +20,7 @@ Engine-Spezifikation: [MoneyMoney Web Banking API](https://moneymoney.app/api/we
 
 ---
 
-## Bank of America — Beta 0.9
+## Bank of America — Beta 0.91
 
 **Datei:** `extensions/Bank of America.lua`
 
@@ -29,7 +29,7 @@ Engine-Spezifikation: [MoneyMoney Web Banking API](https://moneymoney.app/api/we
 
 ```lua
 WebBanking{
-  version     = 0.90,
+  version     = 0.91,
   url         = "https://secure.bankofamerica.com",
   services    = {"Bank of America"},
   description = "Bank of America — Beta (Cookie-Import)"
@@ -57,11 +57,12 @@ Cookie-Import.
 - **RefreshAccount** — Umsätze ab `since` aus Activity-Seiten
 - **Kontoauszüge** — PDF via `GetAvailableStatements` / `GetStatement`
 
-Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
+Username-/Passwort-Login verwendet den Sparta-Flow mit RSA-Verschlüsselung und MFA.
+Wenn die erforderliche MoneyMoney-Krypto-API fehlt, ist Cookie-Import erforderlich.
 
 ---
 
-## Fidelity Investments — Beta 0.91
+## Fidelity Investments — Beta 0.92
 
 **Datei:** `extensions/Fidelity.lua`
 
@@ -70,7 +71,7 @@ Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ```lua
 WebBanking{
-  version     = 0.91,
+  version     = 0.92,
   url         = "https://www.fidelity.com",
   services    = {"Fidelity"},
   description = "Fidelity Investments — Beta (Cookie-Import)"
@@ -83,7 +84,9 @@ WebBanking{
 | Login | `COOKIE:_abck=…;bm_sz=…;ATC=…;ET=…;SESSION_SCTX=…;PIT=…;…` |
 | Session | `LocalStorage.connection` und `LocalStorage.connectionAccountKey` |
 
-Direct-Login blockiert — [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
+Der Sparta-Login benötigt `MM.rsaEncrypt`; bei fehlender API wird auf Cookie-Import
+verwiesen. Der alternative signOnV2-Flow bleibt wegen des erforderlichen
+Browser-Fingerprints von `WebbankingBrowser` abhängig.
 
 ### API-Funktionen
 
@@ -101,7 +104,7 @@ als kritisch.
 
 ---
 
-## MLP Versicherungen — Beta 0.9
+## MLP Versicherungen — Beta 0.91
 
 **Datei:** `extensions/MLP Versicherungen.lua`
 
@@ -110,7 +113,7 @@ als kritisch.
 
 ```lua
 WebBanking{
-  version     = 0.90,
+  version     = 0.91,
   url         = "https://kundenportal.mlp.de",
   services    = {"MLP Versicherungen"},
   description = "MLP Versicherungen — Beta (Cookie-Import)"
@@ -148,7 +151,7 @@ App-Bestätigung oder als anschließende TAN-Abfrage erscheinen.
 
 ```lua
 WebBanking{
-  version     = 1.00,
+  version     = 1.01,
   url         = "https://www.presidentialpcbanking.com",
   services    = {"Presidential Bank"},
   description = "Presidential Bank - MFA and Cookie Import"
@@ -193,7 +196,7 @@ Kontoauszüge sind nicht implementiert.
 
 ```lua
 WebBanking{
-  version     = 1.00,
+  version     = 1.01,
   url         = "https://portfolio.shareview.co.uk",
   services    = {"Shareview"},
   description = "Equiniti Shareview Portfolio - Direct Login (Username + Password + DOB + MFA)"
