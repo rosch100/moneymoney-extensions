@@ -4,6 +4,7 @@
 function WebBanking(_) end
 
 ProtocolWebBanking = "WebBanking"
+LoginFailed = "LoginFailed"
 
 -- MoneyMoney-Typen (numerische Values sind im Extension-Code nur für Gleichheit relevant).
 AccountTypeGiro = 1
@@ -11,6 +12,25 @@ AccountTypeSavings = 2
 AccountTypeCreditCard = 3
 AccountTypeLoan = 4
 AccountTypeSecurities = 5
+
+local presidentialResponses = {}
+function Connection()
+  return {
+    request = function()
+      return table.remove(presidentialResponses, 1)
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+
+MM = {
+  printStatus = function() end,
+  urlencode = function(value)
+    return tostring(value)
+  end,
+}
 
 local function assertEq(actual, expected, label)
   if actual == expected then
@@ -391,6 +411,9 @@ do
 
   local pj = parseJson("good")
   assertEq(type(pj), "table", "parseJson.good.type")
+  if not pj then
+    error("parseJson.good returned nil")
+  end
   assertEq(pj.a, 1, "parseJson.good.value")
   assertEq(parseJson(nil), nil, "parseJson.nil")
   assertEq(parseJson("bad"), nil, "parseJson.invalid->nil")
@@ -398,6 +421,99 @@ do
   assertEq(isMfaSuccess("outerErr"), false, "isMfaSuccess.errorCode=false")
   assertEq(isMfaSuccess("outerSuccess"), true, "isMfaSuccess.targetView-success=true")
   assertEq(isMfaSuccess("outerResult"), true, "isMfaSuccess.result.success=true")
+end
+
+-- Technische Loginfehler dürfen gespeicherte Zugangsdaten nicht invalidieren.
+do
+  local authFailures = {}
+  local function checkTransient(value, label)
+    if type(value) == "string" and value ~= "" and value ~= LoginFailed then
+      print("OK    " .. label)
+    else
+      authFailures[#authFailures + 1] = label .. "=" .. tostring(value)
+      print("FAIL  " .. label)
+    end
+  end
+
+  JSON = function(value)
+    return {
+      dictionary = function()
+        if value == "SERVER_ERROR" then
+          return {
+            targetView = "error",
+            errorMessage = "Service temporarily unavailable",
+          }
+        end
+        if value == "BAD_CREDENTIALS" then
+          return {
+            targetView = "error",
+            errorMessage = "Invalid user ID or password",
+          }
+        end
+        if value == "{}" then
+          return {}
+        end
+        if value == "bad" then
+          error("invalid JSON")
+        end
+        return nil
+      end,
+    }
+  end
+
+  local missingState = InitializeSession2(
+    ProtocolWebBanking,
+    "Presidential Bank",
+    2,
+    {"user", "secret"},
+    true)
+  checkTransient(missingState, "InitializeSession2.missingState.transient")
+
+  presidentialResponses = {}
+  local noExternalResponse = handleLoginStep1({"user", "secret"})
+  checkTransient(noExternalResponse, "handleLoginStep1.noExternalResponse.transient")
+
+  presidentialResponses = {"SERVER_ERROR"}
+  local technicalApiError = handleLoginStep1({"user", "secret"})
+  checkTransient(technicalApiError, "handleLoginStep1.technicalApiError.transient")
+
+  presidentialResponses = {"BAD_CREDENTIALS"}
+  local rejectedCredentials = handleLoginStep1({"user", "wrong"})
+  assertEq(rejectedCredentials, LoginFailed, "handleLoginStep1.rejectedCredentials")
+
+  presidentialResponses = {"{}"}
+  local noRedirectResponse = handleLoginStep1({"user", "secret"})
+  checkTransient(noRedirectResponse, "handleLoginStep1.noRedirectResponse.transient")
+
+  presidentialResponses = {}
+  local noMfaConfig = getMfaConfig()
+  checkTransient(noMfaConfig, "getMfaConfig.noResponse.transient")
+
+  presidentialResponses = {"bad"}
+  local invalidMfaConfig = getMfaConfig()
+  checkTransient(invalidMfaConfig, "getMfaConfig.invalidResponse.transient")
+
+  presidentialResponses = {"{}"}
+  getMfaConfig()
+  mergeSessionCookie("SESSION_TOKEN", "ACTIVE")
+  presidentialResponses = {"bad"}
+  local invalidMfaResponse = verifyMfaCode("123456")
+  checkTransient(invalidMfaResponse, "verifyMfaCode.invalidResponse.transient")
+
+  EndSession()
+  followPostLoginRedirect = function() end
+  activateOlbSession = function() end
+  performApiRequest = function() return nil end
+  collectRftokenFromResponses = function() end
+  updateDevicePrivateFromAuthtoken = function() end
+  verifySessionWithAccounts = function() return false end
+  verifySessionWithHistory = function() return false end
+  local incompleteSession = finalizeLogin("{}")
+  checkTransient(incompleteSession, "finalizeLogin.incompleteSession.transient")
+
+  if #authFailures > 0 then
+    error("Auth error classification failed: " .. table.concat(authFailures, ", "))
+  end
 end
 
 print("ALL PRESIDENTIAL BANK UNIT TESTS PASSED")

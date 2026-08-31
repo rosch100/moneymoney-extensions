@@ -3,6 +3,7 @@ import {
   buildHint,
   collectCookies,
   detectBank,
+  exportBlockReason,
   formatCookieExport,
   missingCritical,
 } from './cookie-export.js';
@@ -21,6 +22,10 @@ let currentExport = '';
 function setStatus(text, level) {
   statusEl.textContent = text;
   statusEl.className = level || '';
+}
+
+function partialAccessHint(failedOrigins) {
+  return `Teilweise kein Cookie-Zugriff: ${failedOrigins.join(', ')}`;
 }
 
 async function refresh(banks) {
@@ -50,8 +55,9 @@ async function refresh(banks) {
 
   const missing = missingCritical(cookies, bank);
   hintEl.textContent = buildHint(bank, missing, host);
+  const blockReason = exportBlockReason(cookies, missing, failedOrigins);
 
-  if (failedOrigins.length > 0 && cookies.length === 0) {
+  if (blockReason === 'permission') {
     setStatus('Cookie-Zugriff fehlgeschlagen', 'error');
     hintEl.textContent =
       'Berechtigung für diese Bank-Seite fehlt oder wurde verweigert (Safari: Extension in der Toolbar erlauben).';
@@ -59,28 +65,31 @@ async function refresh(banks) {
     return;
   }
 
-  if (cookies.length === 0) {
+  if (blockReason === 'empty') {
     setStatus('Nicht eingeloggt oder keine Cookies', 'error');
     copyBtn.disabled = true;
     return;
   }
 
   if (failedOrigins.length > 0) {
-    hintEl.textContent = [
-      hintEl.textContent,
-      `Teilweise kein Cookie-Zugriff: ${failedOrigins.join(', ')}`,
-    ]
+    hintEl.textContent = [hintEl.textContent, partialAccessHint(failedOrigins)]
       .filter(Boolean)
       .join(' ');
   }
 
-  if (missing.length === 0) {
-    setStatus(`${cookies.length} Cookies bereit`, 'ok');
-    copyBtn.disabled = false;
+  if (blockReason === 'missing') {
+    setStatus(`Fehlt: ${missing.join(', ')}`, 'warn');
+    copyBtn.disabled = true;
     return;
   }
 
-  setStatus(`Fehlt: ${missing.join(', ')}`, 'warn');
+  if (blockReason === 'partial') {
+    setStatus('Cookie-Zugriff unvollständig', 'warn');
+    copyBtn.disabled = true;
+    return;
+  }
+
+  setStatus(`${cookies.length} Cookies bereit`, 'ok');
   copyBtn.disabled = false;
 }
 

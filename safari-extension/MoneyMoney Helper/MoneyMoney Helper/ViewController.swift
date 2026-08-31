@@ -104,11 +104,30 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
                 return
             }
         }
+        if #available(macOS 26, *) {
+            showSafariSettingsOpenFailed(in: webView)
+            return
+        }
         SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { _ in
             DispatchQueue.main.async {
                 NSApplication.shared.terminate(nil)
             }
         }
+    }
+
+    private func showSafariSettingsOpenFailed(in webView: WKWebView) {
+        os_log(.error, "MoneyMoney Helper: Safari-Einstellungen per URL-Scheme nicht öffnbar")
+        webView.loadHTMLString(
+            """
+            <!DOCTYPE html><html><body style="font: -apple-system-body; margin: 2rem;">
+            <p><strong>MoneyMoney Helper</strong></p>
+            <p>Safari-Einstellungen konnten nicht geöffnet werden.</p>
+            <p>Bitte manuell öffnen: Safari → Einstellungen → Erweiterungen → MoneyMoney Helper aktivieren.</p>
+            <p>Auf macOS&nbsp;26+ „Websites bearbeiten“ nicht verwenden (Safari-Bug).</p>
+            </body></html>
+            """,
+            baseURL: nil
+        )
     }
 
 }

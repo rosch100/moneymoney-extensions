@@ -144,6 +144,9 @@ assertTrue(envelope ~= nil and envelope:match("^b64:"), "buildCipherEnvelope")
 
 local cipherValue, cipherError = encryptCredential(sessionKey, "user123")
 assertTrue(cipherValue ~= nil, "encryptCredential")
+if not cipherValue then
+  error("encryptCredential returned nil")
+end
 assertTrue(cipherValue:match("^b64:"), "encryptCredential.base64")
 assertEq(cipherError, nil, "encryptCredential.error")
 
@@ -154,9 +157,61 @@ assertEq(parseLoginApiError('{"errorInfo":[{"code":"invalid","description":"Bad 
 assertTrue(isLoginCompletionOk('{"completion":{"code":"100","value":"ALLOW"}}'), "isLoginCompletionOk")
 
 local contact = extractSecuredContactPoint('{"securedContactPoints":[{"deliveryMethod":"TEXT","maskedContactPoint":{"value":"XXX-1234"}}]}')
+if not contact then
+  error("extractSecuredContactPoint returned nil")
+end
 assertEq(contact.deliveryMethod, "TEXT", "extractSecuredContactPoint")
 
 assertTrue(isAuthenticatedAccountPage('<html>Ending in 1234 balance</html>'), "isAuthenticatedAccountPage.ok")
 assertTrue(not isAuthenticatedAccountPage('<html>Sign In</html>'), "isAuthenticatedAccountPage.login")
+assertTrue(
+  not isAuthenticatedAccountPage('<html>Learn how to balance your financial goals</html>'),
+  "isAuthenticatedAccountPage.genericBalance")
+
+local missingMfaState = InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  2,
+  {"user123", "secret"},
+  true)
+local authFailures = {}
+local function checkAuthError(value, label)
+  if type(value) == "string" and value ~= "" and value ~= LoginFailed then
+    print("OK    " .. label)
+  else
+    authFailures[#authFailures + 1] = label .. "=" .. tostring(value)
+    print("FAIL  " .. label)
+  end
+end
+checkAuthError(missingMfaState, "InitializeSession2.missingMfaState.transient")
+
+local noResponse = InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"user123", "COOKIE:SMSESSION=value"},
+  true)
+checkAuthError(noResponse, "cookieImport.noResponse.error")
+
+Connection = function()
+  return {
+    request = function()
+      return "<html><body>Unexpected response</body></html>"
+    end,
+    getCookies = function()
+      return ""
+    end,
+  }
+end
+local unexpectedResponse = InitializeSession2(
+  ProtocolWebBanking,
+  "Bank of America",
+  1,
+  {"user123", "COOKIE:SMSESSION=value"},
+  true)
+checkAuthError(unexpectedResponse, "cookieImport.unexpectedResponse.error")
+if #authFailures > 0 then
+  error("Auth error classification failed: " .. table.concat(authFailures, ", "))
+end
 
 print("All BoA login helper tests passed.")

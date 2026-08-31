@@ -67,7 +67,43 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
     return handleCookieImportStep(credentials)
   end
 
-  return LoginFailed
+  return "Anmeldesitzung abgelaufen. Bitte erneut anmelden."
+end
+
+local function isCredentialRejectionMessage(message)
+  if type(message) ~= "string" then
+    return false
+  end
+  local lower = message:lower()
+  local markers = {
+    "incorrect password",
+    "invalid user id or password",
+    "invalid username or password",
+    "wrong password",
+    "falsches passwort",
+    "passwort ist falsch",
+    "ungültige anmeldedaten",
+    "ungueltige anmeldedaten"
+  }
+  for _, marker in ipairs(markers) do
+    if lower:find(marker, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+local function classifyExternalLoginError(loginData)
+  if loginData.targetView ~= "error" and not loginData.errorMessage then
+    return nil
+  end
+  if isCredentialRejectionMessage(loginData.errorMessage) then
+    return LoginFailed
+  end
+  if type(loginData.errorMessage) == "string" and loginData.errorMessage ~= "" then
+    return "Anmeldeserver meldet Fehler: " .. loginData.errorMessage
+  end
+  return "Anmeldeserver meldet einen technischen Fehler."
 end
 
 function handleLoginStep1(credentials)
@@ -118,14 +154,18 @@ function handleLoginStep1(credentials)
   )
 
   if not externalResponse then
-    return LoginFailed
+    return "Keine Antwort vom Anmeldeserver."
   end
 
   syncSessionCookies()
 
   local extLoginData = parseJson(externalResponse)
-  if extLoginData and (extLoginData.targetView == "error" or extLoginData.errorMessage) then
-    return LoginFailed
+  if not extLoginData then
+    return "Ungültige Antwort vom Anmeldeserver."
+  end
+  local loginError = classifyExternalLoginError(extLoginData)
+  if loginError then
+    return loginError
   end
 
   -- POST to login/redirect
@@ -143,7 +183,7 @@ function handleLoginStep1(credentials)
   )
 
   if not redirectResponse then
-    return LoginFailed
+    return "Keine Antwort beim Aufbau der Anmeldesitzung."
   end
 
   syncSessionCookies()
@@ -158,7 +198,7 @@ function getMfaConfig()
   }))
 
   if not mfaConfigResponse then
-    return LoginFailed
+    return "Keine Antwort beim Laden der MFA-Konfiguration."
   end
 
   syncSessionCookies()
@@ -166,7 +206,7 @@ function getMfaConfig()
   local mfaData = parseJson(mfaConfigResponse)
 
   if not mfaData then
-    return LoginFailed
+    return "Ungültige Antwort beim Laden der MFA-Konfiguration."
   end
 
   session.mfaConfig = mfaData
@@ -430,6 +470,10 @@ function verifyMfaCode(code)
 
   if not isMfaSuccess(mfaResponse) then
     local data = parseJson(mfaResponse)
+    if not data then
+      session.waitingForMfaCode = false
+      return "MFA verification failed: Invalid server response"
+    end
     if isMfaSessionError(data) then
       session.waitingForMfaCode = false
       return "MFA fehlgeschlagen: Session oder CSRF ungültig (Fehler " ..
@@ -1113,7 +1157,7 @@ function finalizeLogin(mfaResponse)
     return "Login fehlgeschlagen: rftoken nicht zugaenglich (SESSION_TOKEN ok, aber Folge-Calls nicht authentifizierbar)."
   end
 
-  return LoginFailed
+  return "Login fehlgeschlagen: Sitzung konnte nach MFA nicht aktiviert werden."
 end
 
 function findTotpId()
@@ -1342,7 +1386,15 @@ end
 function calculateDateRange(since)
   local endDate = os.date("%Y-%m-%d %H:%M:%S", os.time())
   local now = os.time()
-  local oneYearAgo = os.time({year = os.date("%Y", now) - 1, month = os.date("%m", now), day = os.date("%d", now)})
+  local nowParts = os.date("*t", now)
+  if type(nowParts) ~= "table" then
+    error("Aktuelles Datum konnte nicht ermittelt werden.")
+  end
+  local oneYearAgo = os.time({
+    year = nowParts.year - 1,
+    month = nowParts.month,
+    day = nowParts.day
+  })
 
   local startDate
   if since and since > oneYearAgo then
@@ -1587,13 +1639,19 @@ function parseDate(dateStr)
   -- ISO format: YYYY-MM-DD
   local year, month, day = dateStr:match("(%d%d%d%d)-(%d%d)-(%d%d)")
   if year and month and day then
-    return os.time({year = tonumber(year), month = tonumber(month), day = tonumber(day)})
+    local parsedYear, parsedMonth, parsedDay = tonumber(year), tonumber(month), tonumber(day)
+    if parsedYear and parsedMonth and parsedDay then
+      return os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+    end
   end
 
   -- US format: MM/DD/YYYY
   month, day, year = dateStr:match("(%d%d?)/(%d%d?)/(%d%d%d%d)")
   if month and day and year then
-    return os.time({year = tonumber(year), month = tonumber(month), day = tonumber(day)})
+    local parsedYear, parsedMonth, parsedDay = tonumber(year), tonumber(month), tonumber(day)
+    if parsedYear and parsedMonth and parsedDay then
+      return os.time({year = parsedYear, month = parsedMonth, day = parsedDay})
+    end
   end
 
   return nil

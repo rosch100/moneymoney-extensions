@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       # Lua 5.4 liegt in der im rockspec geforderten Spanne (>=5.1, <5.5)
       - name: Setup Lua
@@ -39,21 +40,26 @@ jobs:
       - name: Lua unit tests
         run: |
           set -euo pipefail
-          files="$(git ls-files 'tests/*.lua' || true)"
+          files="$(git ls-files 'tests/*.lua')"
           if [ -z "${files}" ]; then
             echo "No Lua tests tracked."
             exit 0
           fi
-          for f in ${files}; do
-            lua "$f"
-          done
+          while IFS= read -r file; do
+            lua "$file"
+          done <<< "${files}"
 
       - name: Lua syntax check (all tracked .lua)
         run: |
           set -euo pipefail
+          files="$(git ls-files '*.lua')"
+          if [ -z "${files}" ]; then
+            echo "No Lua files tracked."
+            exit 0
+          fi
           while IFS= read -r file; do
             lua -e "assert(loadfile('$file'))"
-          done < <(git ls-files '*.lua')
+          done <<< "${files}"
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -63,37 +69,44 @@ jobs:
       - name: Python syntax check
         run: |
           set -euo pipefail
-          files="$(git ls-files '*.py' || true)"
+          files="$(git ls-files '*.py')"
           if [ -z "${files}" ]; then
             echo "No Python files tracked."
             exit 0
           fi
           while IFS= read -r file; do
             python3 -m py_compile "$file"
-          done < <(git ls-files '*.py')
+          done <<< "${files}"
 
       - name: Python unit tests (tracked tests/*.py)
         run: |
           set -euo pipefail
+          files="$(git ls-files 'tests/*.py')"
+          if [ -z "${files}" ]; then
+            echo "No Python tests tracked."
+            exit 0
+          fi
           while IFS= read -r f; do
-            [ -z "$f" ] && continue
             python3 "$f"
-          done < <(git ls-files 'tests/*.py')
+          done <<< "${files}"
 
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: "24"
 
+      - name: JavaScript unit tests (cookie export)
+        run: node tests/test_cookie_export.mjs
+
       - name: JavaScript parse check (tracked .js)
         run: |
           set -euo pipefail
-          files="$(git ls-files '*.js' || true)"
+          files="$(git ls-files '*.js')"
           if [ -z "${files}" ]; then
             echo "No JavaScript files tracked."
             exit 0
           fi
           while IFS= read -r file; do
             node --check "$file"
-          done < <(git ls-files '*.js')
+          done <<< "${files}"
 

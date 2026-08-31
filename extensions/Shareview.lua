@@ -136,14 +136,14 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   end
   if session.awaitingDob then return submitDobAndLogin(credentials[1]) end
   if session.awaitingMfa then return submitMfaCode(credentials) end
-  return LoginFailed
+  return "Anmeldesitzung abgelaufen. Bitte erneut anmelden."
 end
 
 function loginStep1(credentials, interactive)
   local rawUsername = credentials[1]
   local password    = credentials[2]
 
-  if not password or password == "" then return LoginFailed end
+  if not password or password == "" then return "Bitte ein Shareview-Passwort eingeben." end
   if password:match("^COOKIE:") then return loginWithImportedCookies(password:sub(8)) end
 
   local username, day, month, year = parseUsernameDob(rawUsername)
@@ -176,7 +176,9 @@ function submitDobAndLogin(dobRaw)
   session.awaitingDob = false
   local username, password = session.pendingUsername, session.pendingPassword
   session.pendingUsername, session.pendingPassword = nil, nil
-  if not username or not password then return LoginFailed end
+  if not username or not password then
+    return "Anmeldesitzung für das Geburtsdatum abgelaufen. Bitte erneut anmelden."
+  end
 
   local day, month, year = parseDobString(dobRaw)
   if not isValidDob(day, month, year) then
@@ -225,7 +227,9 @@ function submitCredentials(username, password, day, month, year)
 end
 
 function submitMfaCode(credentials)
-  if not session.mfaHtmlString then return LoginFailed end
+  if not session.mfaHtmlString then
+    return "MFA-Session abgelaufen. Bitte erneut anmelden."
+  end
 
   local code = credentials[1]
   if not code or not code:match("^%s*%d+%s*$") then

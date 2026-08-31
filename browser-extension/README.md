@@ -54,6 +54,11 @@ xcrun safari-web-extension-converter browser-extension \
 
 ## Nutzung
 
+Konfiguriert sind **Bank of America**, **Fidelity** und
+**MLP Versicherungen**. Presidential Bank und Shareview werden von der
+Browser-Extension derzeit nicht exportiert; deren optionaler Cookie-Import
+erfolgt manuell.
+
 1. Im Browser einloggen (inkl. MFA)
 2. Kontoseite öffnen (siehe README: bank-spezifische Hinweise)
 3. Extension-Icon → **Cookies kopieren**
@@ -76,6 +81,8 @@ Icons: `python3 scripts/generate-extension-icons.py`
 - `host_permissions` — konkrete Origins aus `cookie-export-banks.json` (keine `*.domain`-Wildcards; Safari 27 crasht sonst in Websites Preferences); Cookie-Abfrage nur über diese Origins
 - Kein `activeTab`, kein `clipboardWrite` (Clipboard via Nutzerklick im Popup)
 
+**Neue Bank oder Subdomain:** Jede Hostname, von der Session-Cookies gelesen werden müssen, braucht einen eigenen `https://`-Eintrag in `origins` (und damit in `host_permissions`). `session_host` muss in `origins` enthalten sein. Danach `python3 scripts/sync_safari_extension_resources.py` ausführen.
+
 ### Safari / macOS 27
 
 Extension in **Safari → Einstellungen → Erweiterungen** aktivieren. **„Websites bearbeiten“ / Edit Websites** nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar auf der Bank-Seite erlauben.
@@ -94,5 +101,7 @@ Tests:
 
 ```bash
 python3 tests/test_browser_extension_manifest.py
+python3 tests/test_cookie_export_config.py
+node tests/test_cookie_export.mjs
 python3 tests/test_external_scripts_conformance.py
 ```

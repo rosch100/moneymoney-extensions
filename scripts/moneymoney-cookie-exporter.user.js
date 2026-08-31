@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         MoneyMoney Cookie Exporter (US-Banken)
-// @namespace    https://github.com/rosch100/moneymoney-us-extensions
+// @namespace    https://github.com/rosch100/moneymoney-extensions
 // @version      1.0.0
 // @description  Session-Cookies für MoneyMoney
 // @author       rosch100
