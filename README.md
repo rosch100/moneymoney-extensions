@@ -8,13 +8,14 @@ Web-Banking-Extensions für [MoneyMoney](https://moneymoney.app).
 |-----------|---------|-------|--------|
 | [Bank of America](extensions/Bank%20of%20America.lua) | **0.9 Beta** | Cookie-Import | Username/Passwort blockiert (Browser-Fingerprint) |
 | [Fidelity](extensions/Fidelity.lua) | **0.91 Beta** | Cookie-Import | Username/Passwort blockiert (Akamai + MFA) |
-| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import; JWE/SecureGo implementiert | Direct-Login in MoneyMoney blockiert (`MM.aes256gcm` fehlt) |
+| [MLP Versicherungen](extensions/MLP%20Versicherungen.lua) | **0.9 Beta** | Cookie-Import; JWE/SecureGo implementiert | Direct-Login, wenn die erforderlichen MoneyMoney-Krypto-APIs verfügbar sind |
 | [Presidential Bank](extensions/Presidential%20Bank.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
 | [Shareview](extensions/Shareview.lua) | 1.0 | Username/Passwort + MFA | Cookie-Import optional |
 
 **Beta:** Der Cookie-Import ist der unterstützte Anmeldeweg. Bei MLP ist der
-JWE-/SecureGo-Login implementiert, benötigt aber Krypto-APIs, die MoneyMoney
-derzeit nicht vollständig bereitstellt.
+JWE-/SecureGo-Login implementiert und wird verwendet, wenn MoneyMoney die
+benötigten Zufalls-, Base64url-, RSA- und A256GCM-APIs bereitstellt; andernfalls
+fordert die Extension den Cookie-Import an.
 
 **MLP Bank vs. MLP Versicherungen:** FinTS-Giro (MLP Bank) ist ein separates MoneyMoney-Produkt. Diese Extension deckt nur Versicherungsverträge über `vue.mlp.de` ab.
 
@@ -53,7 +54,7 @@ Felder sind unter [Lua-Extensions](docs/LUA-EXTENSIONS.md) aufgeführt.
 
 1. Extension bauen/starten: siehe [browser-extension/README.md](browser-extension/README.md) (Safari: Xcode Run der Hüllen-App)
 2. Safari → **Einstellungen → Erweiterungen** → **MoneyMoney Helper** aktivieren  
-   (unter macOS 27 **nicht** „Websites bearbeiten“ öffnen — Safari-Bug)
+   (unter macOS 26 und neuer **nicht** „Websites bearbeiten“ öffnen — Safari-Bug)
 3. Bank-Seite öffnen; ggf. Zugriff über die Safari-Toolbar erlauben
 4. Extension-Icon → **Cookies kopieren**
 5. In MoneyMoney ins Passwortfeld einfügen (`COOKIE:…`)
@@ -66,9 +67,11 @@ DevTools → Network → **Save all as HAR**, dann:
 
 | Bank | Befehl | Wichtige Cookies |
 |------|--------|------------------|
-| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN` |
-| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | kritisch: `ATC`, `_abck`; zusätzlich unter anderem `ET`, `FC`, `RC`, `SC`, `MC`, `PORTSUM_XSRF-TOKEN`, `bm_*` |
+| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN`, `LSESSIONID` |
+| Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | kritisch: `_abck`, `bm_sz`, `ATC`, `ET`, `SESSION_SCTX`, `PIT`; zusätzlich unter anderem `FC`, `RC`, `SC`, `MC`, `PORTSUM_XSRF-TOKEN`, `bm_*` |
 | MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` | `VUSESSIONID` von `vue.mlp.de` |
+| Presidential Bank | `python3 scripts/extract-presidential-cookies.py export.har` | `SESSION_TOKEN`, `rftoken` |
+| Shareview | `python3 scripts/extract-shareview-cookies.py export.har` | `FedAuth` |
 
 ### 3. Tampermonkey (optional)
 
@@ -118,6 +121,7 @@ Lokal: Lua 5.4, Python 3.11.
 for f in tests/*.lua; do lua "$f"; done
 python3 tests/test_extensions_conformance.py
 python3 tests/test_external_scripts_conformance.py
+python3 tests/test_workflow_security.py
 python3 tests/test_cookie_export_config.py
 python3 tests/test_browser_extension_manifest.py
 node tests/test_cookie_export.mjs

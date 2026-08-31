@@ -2,7 +2,7 @@ function show(enabled, useSettingsInsteadOfPreferences) {
     if (useSettingsInsteadOfPreferences) {
         setText("state-on", "MoneyMoney Helper’s extension is currently on. You can turn it off in the Extensions section of Safari Settings.");
         setText("state-off", "MoneyMoney Helper’s extension is currently off. You can turn it on in the Extensions section of Safari Settings.");
-        setText("state-unknown", "You can turn on MoneyMoney Helper’s extension in the Extensions section of Safari Settings. On macOS 27, enable the extension there — do not open “Edit Websites”.");
+        setText("state-unknown", "You can turn on MoneyMoney Helper’s extension in the Extensions section of Safari Settings. On macOS 26 and later, enable the extension there — do not open “Edit Websites”.");
         setText("open-preferences", "Quit and Open Safari Settings…");
     }
 

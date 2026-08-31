@@ -223,7 +223,7 @@
       return 'Seite: ' + bank.sessionHost;
     }
     if (isSafari()) {
-      return 'Safari: HAR oder crul (README).';
+      return 'Safari: HAR oder curl (README).';
     }
     if (!hasGmCookieApi() || gmCount === 0) {
       return 'Tampermonkey: Cookie-Zugriff «Alle».';
