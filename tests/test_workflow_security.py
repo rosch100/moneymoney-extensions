@@ -53,6 +53,11 @@ def main() -> None:
         "loadfile('$file')" not in ci,
         "Lua-Syntaxcheck darf Dateipfade nicht in Lua-Quelltext interpolieren",
     )
+    assert_true(
+        'LUA_FILE="${file}" lua -e \'assert(loadfile(os.getenv("LUA_FILE")))\''
+        in ci,
+        "Lua-Syntaxcheck darf geprüfte Dateien nicht ausführen",
+    )
 
     security = (ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
     assert_true(

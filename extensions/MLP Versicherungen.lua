@@ -1499,9 +1499,18 @@ function ListAccounts(knownAccounts)
 
   local accounts = {}
   for _, contract in ipairs(session.contracts) do
-    table.insert(accounts, createAccountFromContract(contract))
+    if isPortfolioContract(contract) then
+      table.insert(accounts, createAccountFromContract(contract))
+    end
+  end
+  if #accounts == 0 then
+    return "Keine bewertbaren Versicherungsverträge verfügbar."
   end
   return accounts
+end
+
+function isPortfolioContract(contract)
+  return type(contract) == "table" and tonumber(contract.shareValue) ~= nil
 end
 
 function createAccountFromContract(contract)

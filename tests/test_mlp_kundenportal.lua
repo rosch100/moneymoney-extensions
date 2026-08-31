@@ -332,6 +332,14 @@ assertEq(getContractTypeName("KLV"), "Kapitallebensversicherung", "typeMapping.K
 assertEq(getContractTypeName("REN"), "Rentenversicherung", "typeMapping.REN")
 assertEq(getContractTypeName("BU"), "Berufsunfähigkeitsversicherung", "typeMapping.BU")
 assertEq(getContractTypeName("UNKNOWN"), "Vorsorgevertrag", "typeMapping.unknown")
+assertEq(
+  isPortfolioContract({shareValue = 100}),
+  true,
+  "isPortfolioContract.valuedContract")
+assertEq(
+  isPortfolioContract({shareValue = nil}),
+  false,
+  "isPortfolioContract.nonValuedContract")
 
 -- ============================================================
 -- Tests: Vertragsverarbeitung
@@ -509,17 +517,37 @@ local incompleteVueContract = mapVueContractToInternal({
   number = "VUE-1",
   shareValue = 100,
 })
-assertEq(incompleteVueContract.company.shortName, nil, "mapVueContract.noDummyCompany")
-assertEq(incompleteVueContract.contribution, nil, "mapVueContract.noDummyContribution")
+local vueCompany = incompleteVueContract and incompleteVueContract.company
+if type(vueCompany) ~= "table" then
+  error("mapVueContract.result.company must be a table")
+end
+assertEq(vueCompany.shortName, nil, "mapVueContract.noDummyCompany")
+assertEq(
+  incompleteVueContract and incompleteVueContract.contribution,
+  nil,
+  "mapVueContract.noDummyContribution")
 
 local incompleteApiContract = mapApiContractToInternal({
   number = "API-1",
   shareValue = 100,
 })
-assertEq(incompleteApiContract.company.shortName, nil, "mapApiContract.noDummyCompany")
-assertEq(incompleteApiContract.contribution, nil, "mapApiContract.noDummyContribution")
-assertEq(incompleteApiContract.currency, nil, "mapApiContract.noDummyCurrency")
-assertEq(incompleteApiContract.state, nil, "mapApiContract.noDummyState")
+local apiCompany = incompleteApiContract and incompleteApiContract.company
+if type(apiCompany) ~= "table" then
+  error("mapApiContract.result.company must be a table")
+end
+assertEq(apiCompany.shortName, nil, "mapApiContract.noDummyCompany")
+assertEq(
+  incompleteApiContract and incompleteApiContract.contribution,
+  nil,
+  "mapApiContract.noDummyContribution")
+assertEq(
+  incompleteApiContract and incompleteApiContract.currency,
+  nil,
+  "mapApiContract.noDummyCurrency")
+assertEq(
+  incompleteApiContract and incompleteApiContract.state,
+  nil,
+  "mapApiContract.noDummyState")
 
 local missingCompanyOk, missingCompanyError = pcall(
   _G.createAccountFromContract,

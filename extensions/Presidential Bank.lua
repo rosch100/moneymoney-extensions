@@ -118,6 +118,16 @@ local function classifyExternalLoginError(loginData)
   return "Anmeldeserver meldet einen technischen Fehler."
 end
 
+function classifyLoginRedirectError(loginData)
+  if type(loginData) ~= "table" then
+    return nil
+  end
+  if loginData.targetView == "consumer_login" then
+    return "Anmeldeserver meldet eine ungültige Login-Weiterleitung."
+  end
+  return nil
+end
+
 function handleLoginStep1(credentials)
   local username = credentials[1]
   local password = credentials[2]
@@ -199,6 +209,15 @@ function handleLoginStep1(credentials)
   end
 
   syncSessionCookies()
+
+  local redirectData = parseJson(redirectResponse)
+  if not redirectData then
+    return "Ungültige Antwort beim Aufbau der Anmeldesitzung."
+  end
+  local redirectError = classifyLoginRedirectError(redirectData)
+  if redirectError then
+    return redirectError
+  end
 
   return getMfaConfig()
 end
