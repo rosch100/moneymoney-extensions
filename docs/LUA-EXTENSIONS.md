@@ -9,9 +9,9 @@ Die Lua-Quellen liegen in **eigenen Repositories**. Dieses Dokument ist nur der 
 
 | Version | Bedeutung |
 |---------|-----------|
-| **0.91 / 0.92** | Beta — Cookie-Import ist der unterstützte Anmeldeweg |
+| **0.91 / 0.92** | Beta — Cookie-Import empfohlen; Username/Passwort bleibt, soweit Engine-APIs reichen |
 | **1.01 / 1.02** | Direct-Login mit MFA (optional Cookie-Import) |
-| **2.0** | Amazon-Bestellungen (Service-Name `Amazon`) |
+| **2.0** | Amazon-Bestellungen (Service-Name `Amazon Bestellungen`) |
 
 Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 (siehe [README](../README.md#signiert-vs-eigenrepos)).
@@ -31,7 +31,8 @@ Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 
 **Repo:** [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney)
 
-Service-Name: `Amazon` (nicht `Amazon Orders`, Koexistenz mit anderer Listung).
+Service-Name: `Amazon Bestellungen` (nicht `Amazon Orders`; nicht nur `Amazon`,
+wegen Kollision mit MoneyMoney’s Amazon-Kreditkarte).
 Host-Whitelist der Extension: `www.amazon.de`.
 
 ---
@@ -41,6 +42,7 @@ Host-Whitelist der Extension: `www.amazon.de`.
 **Repo:** [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney)
 
 Cookie-Import: `COOKIE:SMSESSION=…;SSOTOKEN=…;LSESSIONID=…`.
+Username/Passwort (Sparta + MFA) wenn `MM.rsaEncrypt` verfügbar; sonst Cookie.
 HAR: `python3 scripts/extract-boa-cookies.py login.har`.
 
 ---
@@ -49,7 +51,8 @@ HAR: `python3 scripts/extract-boa-cookies.py login.har`.
 
 **Repo:** [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney)
 
-Cookie-Import über Portfolio Summary. Direct-Login blockiert (Akamai + MFA).
+Cookie-Import über Portfolio Summary. Username/Passwort in Lua derzeit nicht
+möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
@@ -57,7 +60,8 @@ Cookie-Import über Portfolio Summary. Direct-Login blockiert (Akamai + MFA).
 
 **Repo:** [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney)
 
-Cookie-Import: `VUSESSIONID` von `vue.mlp.de`. JWE/SecureGo wenn Engine-Krypto da;
+Cookie-Import: `VUSESSIONID` von `vue.mlp.de`. Username/Passwort: JWE/SecureGo
+wenn Engine-Krypto da, sonst Klartext-Versuch, danach Cookie-Fallback;
 siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---

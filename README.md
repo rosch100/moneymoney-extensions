@@ -21,10 +21,10 @@ Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Extension | Repo | Version | Status |
 |-----------|------|---------|--------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.0** | Bestellungen als Umsätze (amazon.de) |
-| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.91 Beta** | Cookie-Import; Sparta-/RSA wenn Engine-API da |
-| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.92 Beta** | Cookie-Import (Akamai + MFA blockiert Direct-Login) |
-| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; JWE/SecureGo bei MM-Krypto-APIs |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.0** | Service *Amazon Bestellungen*; Umsätze (amazon.de) |
+| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (Sparta) wenn Engine-API da |
+| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.92 Beta** | Cookie-Import (Username/Passwort in Lua: Akamai-Blocker) |
+| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (JWE oder Klartext-Fallback) |
 | [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.01** | Username/Passwort + MFA; Cookie optional |
 | [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.02** | Username/Passwort + DOB + MFA; Cookie optional |
 

@@ -1,12 +1,14 @@
 # Offene Punkte für Direct-Login
 
 Cookie-Import funktioniert. Für Username/Passwort-Login in Lua fehlen bzw. fehlten Engine-Erweiterungen.
+Bei den Beta-Plugins bleibt Username/Passwort trotzdem verdrahtet, soweit möglich
+(BoA Sparta, MLP JWE/Klartext); Fidelity ist durch Akamai in Lua blockiert.
 
 | Extension | Blocker | Engine-API |
 |-----------|---------|------------|
-| Bank of America | Anti-Fraud-Fingerprint nur im Browser (`signOnV2.go`) | `WebbankingBrowser` — **nicht geplant** (Stand Adams 2026-09) |
+| Bank of America | Anti-Fraud-Fingerprint nur im Browser (`signOnV2.go`); Sparta-Login braucht RSA | `MM.rsaEncrypt`; `WebbankingBrowser` — **nicht geplant** (Stand Adams 2026-09) |
 | Fidelity | Akamai (`_abck`, `bm_*`) + MFA | `WebbankingBrowser` — **nicht geplant** |
-| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`) | `MM.aes256gcm`; RSA-OAEP SHA-512 bevorzugt |
+| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`); ohne Krypto: Klartext-Versuch, oft JOSE/403 | `MM.aes256gcm`; RSA-OAEP SHA-512 bevorzugt |
 
 Extension-Repos: [LUA-EXTENSIONS.md](LUA-EXTENSIONS.md).
 
