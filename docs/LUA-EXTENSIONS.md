@@ -11,7 +11,7 @@ Die Lua-Quellen liegen in **eigenen Repositories**. Dieses Dokument ist nur der 
 |---------|-----------|
 | **0.91 / 0.92** | Beta — Cookie-Import ist der unterstützte Anmeldeweg |
 | **1.01 / 1.02** | Direct-Login mit MFA (optional Cookie-Import) |
-| **1.25** | Amazon-Bestellungen (Service-Name `Amazon`) |
+| **2.0** | Amazon-Bestellungen (Service-Name `Amazon`) |
 
 Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 (siehe [README](../README.md#signiert-vs-eigenrepos)).
@@ -27,7 +27,7 @@ Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 
 ---
 
-## Amazon — 1.25
+## Amazon — 2.0
 
 **Repo:** [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney)
 

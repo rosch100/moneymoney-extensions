@@ -5,7 +5,7 @@ Stand nach Umsetzung der Sicherheitsrückmeldungen.
 ## Amazon
 
 - Neuer Service-Name: **Amazon** (nicht mehr „Amazon Orders“)
-- Version: **1.25**
+- Version: **2.0**
 - Absolute `http(s)://`-URLs werden gegen `https://www.amazon.de` / `baseurl` geprüft; fremde Hosts lösen einen Fehler aus
 - Repo: https://github.com/rosch100/Amazon-MoneyMoney
 

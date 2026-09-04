@@ -21,7 +21,7 @@ Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Extension | Repo | Version | Status |
 |-----------|------|---------|--------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **1.25** | Bestellungen als Umsätze (amazon.de) |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.0** | Bestellungen als Umsätze (amazon.de) |
 | [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.91 Beta** | Cookie-Import; Sparta-/RSA wenn Engine-API da |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.92 Beta** | Cookie-Import (Akamai + MFA blockiert Direct-Login) |
 | [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; JWE/SecureGo bei MM-Krypto-APIs |
