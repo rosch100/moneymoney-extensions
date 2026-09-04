@@ -24,7 +24,7 @@ Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
 | [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.0** | Service *Amazon Bestellungen*; Umsätze (amazon.de) |
 | [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (Sparta) wenn Engine-API da |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.92 Beta** | Cookie-Import (Username/Passwort in Lua: Akamai-Blocker) |
-| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (JWE oder Klartext-Fallback) |
+| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; JWE (OAEP-SHA-512/`aes256gcm`) oder Klartext |
 | [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.01** | Username/Passwort + MFA; Cookie optional |
 | [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.02** | Username/Passwort + DOB + MFA; Cookie optional |
 
