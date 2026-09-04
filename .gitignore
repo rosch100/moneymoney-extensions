@@ -11,6 +11,7 @@
 # Sensitive Daten / HAR-Exporte
 *.har
 *_cookies.txt
+/Log/
 
 # Python-Caches
 **/__pycache__/
@@ -22,11 +23,14 @@
 # Xcode: benutzerspezifische UI/Workspace-States
 safari-extension/**/xcuserdata/
 
-# Lokale Nebenprojekte / Scratch (nicht committen)
+# Extension-Eigenrepos (Sibling-Clones im Hub-Root)
 /Amazon-MoneyMoney/
+/Bank-of-America-MoneyMoney/
+/Fidelity-MoneyMoney/
+/MLP-Versicherungen-MoneyMoney/
+/Presidential-Bank-MoneyMoney/
+/Shareview-MoneyMoney/
 
-# Nur Dateien aus extensions/, scripts/, docs/ und tests/ ins Repo,
-# Lua-Dateien im Root ausschließen (Entwicklungs-Scratch).
+# Lua-Scratch im Root
 /*.lua
-!/extensions/*.lua
 !/tests/*.lua

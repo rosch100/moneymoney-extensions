@@ -27,6 +27,11 @@ reviews:
     - "!**/DerivedData/**"
     - "!**/*.har"
     - "!**/Amazon-MoneyMoney/**"
+    - "!**/Bank-of-America-MoneyMoney/**"
+    - "!**/Fidelity-MoneyMoney/**"
+    - "!**/MLP-Versicherungen-MoneyMoney/**"
+    - "!**/Presidential-Bank-MoneyMoney/**"
+    - "!**/Shareview-MoneyMoney/**"
 
   tools:
     opengrep:
