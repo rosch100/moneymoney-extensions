@@ -9,12 +9,16 @@ Die Lua-Quellen liegen in **eigenen Repositories**. Dieses Dokument ist nur der 
 
 | Version | Bedeutung |
 |---------|-----------|
-| **0.91 / 0.92** | Beta — Cookie-Import empfohlen; Username/Passwort bleibt, soweit Engine-APIs reichen |
-| **1.01 / 1.02** | Direct-Login mit MFA (optional Cookie-Import) |
-| **2.0** | Amazon-Bestellungen (Service-Name `Amazon Bestellungen`) |
+| **0.91 / 0.92 / 0.93** | Beta — Cookie-Import empfohlen; Username/Passwort bleibt, soweit Engine-APIs reichen |
+| **1.01 / 1.02 / 1.03 / 1.09** | Direct-Login mit MFA (optional Cookie-Import); Shareview Multi-Login; Presidential 1.09 Private-Device-Persistenz |
+| **2.0 / 2.01** | Amazon-Bestellungen (Service-Name `Amazon Bestellungen`); 2.01 Multi-Login-Isolation |
 
 Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 (siehe [README](../README.md#signiert-vs-eigenrepos)).
+
+**Multi-Login:** Mehrere Bankzugänge derselben Extension mit unterschiedlichen
+Logins — Spec
+[2026-09-04-multi-login-localstorage-design.md](superpowers/specs/2026-09-04-multi-login-localstorage-design.md).
 
 ## Engine-Ablauf
 
@@ -27,17 +31,18 @@ Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 
 ---
 
-## Amazon — 2.0
+## Amazon — 2.01
 
 **Repo:** [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney)
 
 Service-Name: `Amazon Bestellungen` (nicht `Amazon Orders`; nicht nur `Amazon`,
 wegen Kollision mit MoneyMoney’s Amazon-Kreditkarte).
 Host-Whitelist der Extension: `www.amazon.de`.
+Multi-Login: Harvest-/Cache-State in `LocalStorage.logins[<email>]`.
 
 ---
 
-## Bank of America — Beta 0.91
+## Bank of America — Beta 0.92
 
 **Repo:** [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney)
 
@@ -47,7 +52,7 @@ HAR: `python3 scripts/extract-boa-cookies.py login.har`.
 
 ---
 
-## Fidelity — Beta 0.92
+## Fidelity — Beta 0.93
 
 **Repo:** [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney)
 
@@ -56,7 +61,7 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
-## MLP Versicherungen — Beta 0.91
+## MLP Versicherungen — Beta 0.92
 
 **Repo:** [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney)
 
@@ -67,18 +72,22 @@ sonst Klartext-Versuch, danach Cookie-Fallback; siehe
 
 ---
 
-## Presidential Bank — 1.01
+## Presidential Bank — 1.09
 
 **Repo:** [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney)
 
 Username/Passwort + MFA; optional `COOKIE:SESSION_TOKEN=…;rftoken=…`.
+Private-Device (`MAF_IB_*`) als Cookie-Header-String in LocalStorage — nach
+MoneyMoney-Neustart kein erneutes TOTP, wenn das Gerät registriert wurde.
 
 ---
 
-## Shareview — 1.02
+## Shareview — 1.03
 
 **Repo:** [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney)
 
 Username/Passwort + Geburtsdatum + MFA. Federation-Hosts in der Extension
 als Konstanten: `portfolio.shareview.co.uk`, `www.equiniti.com` (ADFS).
 Optional `COOKIE:FedAuth=…`.
+Kontonummer neuer Konten `SV.<username>`; bestehendes `shareview-portfolio`
+wird weiter aktualisiert.
