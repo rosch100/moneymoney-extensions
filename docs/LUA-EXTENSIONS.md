@@ -60,9 +60,10 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 **Repo:** [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney)
 
-Cookie-Import: `VUSESSIONID` von `vue.mlp.de`. Username/Passwort: JWE/SecureGo
-wenn Engine-Krypto da, sonst Klartext-Versuch, danach Cookie-Fallback;
-siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
+Cookie-Import: `VUSESSIONID` von `vue.mlp.de`. Username/Passwort: JWE
+(`RSA-OAEP-512` + `A256GCM`) wenn `MM.aes256gcm` und OAEP-SHA-512 da sind,
+sonst Klartext-Versuch, danach Cookie-Fallback; siehe
+[ENGINE-API-GAPS.md](ENGINE-API-GAPS.md) und Branch `feature/mm-crypto-jwe-ready`.
 
 ---
 

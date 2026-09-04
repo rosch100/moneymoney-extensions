@@ -8,7 +8,11 @@ Bei den Beta-Plugins bleibt Username/Passwort trotzdem verdrahtet, soweit mögli
 |-----------|---------|------------|
 | Bank of America | Anti-Fraud-Fingerprint nur im Browser (`signOnV2.go`); Sparta-Login braucht RSA | `MM.rsaEncrypt`; `WebbankingBrowser` — **nicht geplant** (Stand Adams 2026-09) |
 | Fidelity | Akamai (`_abck`, `bm_*`) + MFA | `WebbankingBrowser` — **nicht geplant** |
-| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`); ohne Krypto: Klartext-Versuch, oft JOSE/403 | `MM.aes256gcm`; RSA-OAEP SHA-512 bevorzugt |
+| MLP Versicherungen | JWE (`RSA-OAEP-512`, `A256GCM`); ohne Krypto: Klartext-Versuch, oft JOSE/403 | `MM.aes256gcm`; `MM.rsaEncrypt(…, "pkcs1-oaep sha512")` |
+
+Branch `feature/mm-crypto-jwe-ready` (MLP): JWE nutzt **nur** OAEP-SHA-512 (kein SHA-256
+unter `alg=RSA-OAEP-512`). Sobald `MM.aes256gcm` und SHA-512-OAEP in MoneyMoney
+liegen, greift der JWE-Pfad ohne weitere Code-Änderung an der Padding-Wahl.
 
 Extension-Repos: [LUA-EXTENSIONS.md](LUA-EXTENSIONS.md).
 
@@ -17,9 +21,9 @@ Extension-Repos: [LUA-EXTENSIONS.md](LUA-EXTENSIONS.md).
 JWE-Parameter: `alg` RSA-OAEP-512, `enc` A256GCM, `kid` `cas-pin-encryption-prod-v2`
 
 ```lua
-MM.aes256gcm(key, iv, plaintext, aad?) → ciphertext, tag   -- fehlt weiterhin
+MM.aes256gcm(key, iv, plaintext, aad?) → ciphertext, tag   -- fehlt weiterhin / kommt mit Update
 MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha512") → ciphertext   -- kommt mit nächstem MM-Update
-MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha256") → ciphertext   -- implementierte Alternative
+MM.rsaEncrypt(keyTable, plaintext, "pkcs1-oaep sha256") → ciphertext   -- vorhanden; MLP-JWE nutzt es nicht
 MM.rsaDecrypt(...)  -- analog, mit nächstem Update für sha512
 ```
 
