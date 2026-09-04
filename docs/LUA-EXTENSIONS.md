@@ -10,8 +10,8 @@ Die Lua-Quellen liegen in **eigenen Repositories**. Dieses Dokument ist nur der 
 | Version | Bedeutung |
 |---------|-----------|
 | **0.91 / 0.92** | Beta — Cookie-Import ist der unterstützte Anmeldeweg |
-| **1.01 / 1.02** | Direct-Login mit MFA (optional Cookie-Import) |
-| **2.0** | Amazon-Bestellungen (Service-Name `Amazon`) |
+| **1.01 / 1.02 / 1.03** | Direct-Login mit MFA (optional Cookie-Import) |
+| **2.0 / 2.01** | Amazon-Bestellungen (Service-Name `Amazon`) |
 
 Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 (siehe [README](../README.md#signiert-vs-eigenrepos)).
@@ -27,7 +27,7 @@ Signierte Fremdversionen entsprechen nicht automatisch den Eigenrepos
 
 ---
 
-## Amazon — 2.0
+## Amazon — 2.01
 
 **Repo:** [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney)
 
@@ -36,7 +36,7 @@ Host-Whitelist der Extension: `www.amazon.de`.
 
 ---
 
-## Bank of America — Beta 0.91
+## Bank of America — Beta 0.92
 
 **Repo:** [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney)
 
@@ -53,7 +53,7 @@ Cookie-Import über Portfolio Summary. Direct-Login blockiert (Akamai + MFA).
 
 ---
 
-## MLP Versicherungen — Beta 0.91
+## MLP Versicherungen — Beta 0.92
 
 **Repo:** [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney)
 
@@ -62,7 +62,7 @@ siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
-## Presidential Bank — 1.01
+## Presidential Bank — 1.02
 
 **Repo:** [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney)
 
@@ -70,7 +70,7 @@ Username/Passwort + MFA; optional `COOKIE:SESSION_TOKEN=…;rftoken=…`.
 
 ---
 
-## Shareview — 1.02
+## Shareview — 1.03
 
 **Repo:** [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney)
 
