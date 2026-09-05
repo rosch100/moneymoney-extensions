@@ -73,17 +73,19 @@ Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Givve Prepaid**.
 
 ---
 
-## Pluxee Benefits — 0.91 Beta
+## Pluxee Benefits — 1.00
 
 **Repo:** [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney)
 
 Service-Name / Dateiname: `Pluxee Benefits` / `Pluxee Benefits.lua` (Title Case,
 identisch; Marke + Produkttyp wie *Givve Prepaid* / *Amazon Bestellungen*).
-Portal: `consumers.pluxee.de`, OIDC:
-`connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`. Login E-Mail/OTP
-(Passwort nur wenn Formularfeld); hCaptcha über MoneyMoney-Interactive-Challenge;
-Token-Reuse über `connectionsByAccount`. Kontonummer `pluxee.<benefitId-lower>`; Anzeigename mit Benefit-Name + last4;
-ein Konto **pro Benefit**; Umsätze gefiltert über `splitData.uniqueWalletId`.
+Portal: `consumers.pluxee.de`, OIDC: `connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`.
+Login E-Mail / hCaptcha / OTP (Passwort nur wenn Formularfeld); OAuth-`state` und
+Host-Allowlist; Token-Reuse über `connectionsByAccount`.
+Kontonummer = API-`maskedPan` (z. B. `XXXX 6138`; bei gleicher PAN Suffix `benefitId`);
+Anzeigename ein Konto `{Benefit-Name}`, mehrere `{Benefit-Name} {last4}`;
+ein Konto **pro Benefit**; Umsätze nur `APPROVED`, gefiltert über
+`splitData.uniqueWalletId`, Pagination per `toDate`.
 Saldo/Umsätze `GET /v2/de/cards` und `…/transactions`.
 Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Pluxee Benefits**.
 
