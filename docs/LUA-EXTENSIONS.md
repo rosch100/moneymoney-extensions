@@ -56,31 +56,36 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
-## Givve Card — 1.02
+## Givve Prepaid — 1.05
 
 **Repo:** [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney)
 
-Service-Name: `Givve Prepaid` (nicht `Givve Card` — Kollision mit MoneyMoney’s
-eingebauter Kreditkarte; analog `Amazon Bestellungen` vs. `Amazon-Kreditkarte`).
-Dateiname: `Givve Card.lua`. Portal: `card.givve.com`, API: `www.givve.com`.
+Service-Name / Dateiname: `Givve Prepaid` / `Givve Prepaid.lua` (Title Case,
+identisch; nicht `Givve Card` — Kollision mit MoneyMoney’s eingebauter
+Kreditkarte; analog `Amazon Bestellungen` vs. `Amazon-Kreditkarte`).
+Portal: `card.givve.com`, API: `www.givve.com`.
 Login E-Mail/Passwort + E-Mail-OTP (`POST /api/authorizations`,
 `client_id=givve-card-web`). Host-Allowlist: `card.givve.com`, `www.givve.com`.
 Kontoname `givve` bzw. `givve ****<last4>`; Kontonummer = maskierte PAN
-(`voucher.number`). Multi-Login über `connectionsByAccount`.
+(`voucher.number`); Inhaber aus `GET …/voucher_owners/me`. Umsätze analog Builtin
+(`name`/`purpose`/`valueDate`/`booked`). Multi-Login über `connectionsByAccount`.
 Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Givve Prepaid**.
 
 ---
 
-## Pluxee — 0.91 Beta
+## Pluxee Benefits — 0.91 Beta
 
 **Repo:** [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney)
 
-Service-Name: `Pluxee`. Portal: `consumers.pluxee.de`, OIDC:
+Service-Name / Dateiname: `Pluxee Benefits` / `Pluxee Benefits.lua` (Title Case,
+identisch; Marke + Produkttyp wie *Givve Prepaid* / *Amazon Bestellungen*).
+Portal: `consumers.pluxee.de`, OIDC:
 `connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`. Login E-Mail/OTP
-(Passwort nur wenn Formularfeld); invisible hCaptcha blockiert Erstlogin aus
-Lua → expliziter Fehler; Token-Reuse über `connectionsByAccount`. Kontonummer `pluxee.<benefitId-lower>`; Anzeigename mit Benefit-Name + last4;
+(Passwort nur wenn Formularfeld); hCaptcha über MoneyMoney-Interactive-Challenge;
+Token-Reuse über `connectionsByAccount`. Kontonummer `pluxee.<benefitId-lower>`; Anzeigename mit Benefit-Name + last4;
 ein Konto **pro Benefit**; Umsätze gefiltert über `splitData.uniqueWalletId`.
 Saldo/Umsätze `GET /v2/de/cards` und `…/transactions`.
+Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Pluxee Benefits**.
 
 ---
 
