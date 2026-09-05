@@ -4,7 +4,7 @@ Stand nach Umsetzung der Sicherheitsrückmeldungen und Folge-Härtung.
 
 ## Amazon
 
-- Neuer Service-Name: **Amazon** (nicht mehr „Amazon Orders“)
+- Neuer Service-Name: **Amazon Bestellungen** (nicht „Amazon Orders“, nicht nur „Amazon“)
 - Version: **2.0**
 - Absolute `http(s)://`-URLs werden gegen `https://www.amazon.de` / `baseurl` geprüft; fremde Hosts lösen einen Fehler aus
 - Runtime-Requests (inkl. Form-Actions) und Account-Note-Overrides laufen über dieselbe Host-Prüfung
