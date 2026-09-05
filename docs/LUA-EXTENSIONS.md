@@ -10,6 +10,7 @@ Die Lua-Quellen liegen in **eigenen Repositories**. Dieses Dokument ist nur der 
 | Version | Bedeutung |
 |---------|-----------|
 | **0.91 / 0.92 / 0.93** | Beta — Cookie-Import empfohlen; Username/Passwort bleibt, soweit Engine-APIs reichen |
+| **1.00** | Givve Prepaid / Pluxee Benefits — Direct-Login (E-Mail/OTP; Pluxee zusätzlich hCaptcha) |
 | **1.01 / 1.02 / 1.03 / 1.09** | Direct-Login mit MFA (optional Cookie-Import); Shareview Multi-Login; Presidential 1.09 Private-Device-Persistenz |
 | **2.0 / 2.01** | Amazon-Bestellungen (Service-Name `Amazon Bestellungen`); 2.01 Multi-Login-Isolation |
 
@@ -58,6 +59,41 @@ HAR: `python3 scripts/extract-boa-cookies.py login.har`.
 
 Cookie-Import über Portfolio Summary. Username/Passwort in Lua derzeit nicht
 möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
+
+---
+
+## Givve Prepaid — 1.00
+
+**Repo:** [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney)
+
+Service-Name / Dateiname: `Givve Prepaid` / `Givve Prepaid.lua` (Title Case,
+identisch; nicht `Givve Card` — Kollision mit MoneyMoney’s eingebauter
+Kreditkarte; analog `Amazon Bestellungen` vs. `Amazon-Kreditkarte`).
+Portal: `card.givve.com`, API: `www.givve.com`.
+Login E-Mail/Passwort + E-Mail-OTP (`POST /api/authorizations`,
+`client_id=givve-card-web`). Host-Allowlist: `card.givve.com`, `www.givve.com`.
+Kontoname `givve` bzw. `givve ****<last4>`; Kontonummer = maskierte PAN
+(`voucher.number`); Inhaber aus `GET …/voucher_owners/me`. Umsätze analog Builtin
+(`name`/`purpose`/`valueDate`/`booked`). Multi-Login über `connectionsByAccount`.
+Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Givve Prepaid**.
+
+---
+
+## Pluxee Benefits — 1.00
+
+**Repo:** [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney)
+
+Service-Name / Dateiname: `Pluxee Benefits` / `Pluxee Benefits.lua` (Title Case,
+identisch; Marke + Produkttyp wie *Givve Prepaid* / *Amazon Bestellungen*).
+Portal: `consumers.pluxee.de`, OIDC: `connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`.
+Login E-Mail / hCaptcha / OTP (Passwort nur wenn Formularfeld); OAuth-`state` und
+Host-Allowlist; Token-Reuse über `connectionsByAccount`.
+Kontonummer = API-`maskedPan` (z. B. `XXXX 6138`; bei gleicher PAN Suffix `benefitId`);
+Anzeigename ein Konto `{Benefit-Name}`, mehrere `{Benefit-Name} {last4}`;
+ein Konto **pro Benefit**; Umsätze nur `APPROVED`, gefiltert über
+`splitData.uniqueWalletId`, Pagination per `toDate`.
+Saldo/Umsätze `GET /v2/de/cards` und `…/transactions`.
+Konto anlegen: **Andere** (nicht IBAN/BLZ) → **Pluxee Benefits**.
 
 ---
 
