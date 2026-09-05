@@ -21,14 +21,19 @@ Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Extension | Repo | Version | Status |
 |-----------|------|---------|--------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.0** | Service *Amazon Bestellungen*; Umsätze (amazon.de) |
-| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (Sparta) wenn Engine-API da |
-| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.92 Beta** | Cookie-Import (Username/Passwort in Lua: Akamai-Blocker) |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.01** | Service *Amazon Bestellungen*; Umsätze (amazon.de) |
+| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import; Username/Passwort (Sparta) wenn Engine-API da |
+| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import (Username/Passwort in Lua: Akamai-Blocker) |
 | [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Service/Datei *Givve Prepaid*; E-Mail/Passwort + E-Mail-OTP; Umsätze Builtin-nah; ein Konto pro Voucher (`card.givve.com` / API `www.givve.com`) |
 | [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.00** | Service/Datei *Pluxee Benefits*; E-Mail/OTP/hCaptcha; Konto pro Benefit (`consumers.pluxee.de` / BFF) |
-| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.91 Beta** | Cookie-Import; Username/Passwort (JWE oder Klartext-Fallback) |
-| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.01** | Username/Passwort + MFA; Cookie optional |
-| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.02** | Username/Passwort + DOB + MFA; Cookie optional |
+| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.92 Beta** | Cookie-Import; JWE (OAEP-SHA-512/`aes256gcm`) oder Klartext |
+| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Username/Passwort + MFA; Cookie optional; Private-Device überlebt Neustart |
+| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.03** | Username/Passwort + DOB + MFA; Cookie optional |
+
+**Multi-Login:** Dieselbe Extension mehrfach mit unterschiedlichen Zugangsdaten
+anlegen. Sessions werden über `LocalStorage.connectionsByAccount` (bzw. Amazon
+`LocalStorage.logins`) pro Login isoliert — siehe
+[docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md).
 
 **MLP Bank vs. MLP Versicherungen:** FinTS-Giro (MLP Bank) ist ein separates
 MoneyMoney-Produkt. Die Extension deckt nur Versicherungsverträge über
