@@ -56,16 +56,28 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
-## givve Card — 0.91 Beta
+## Givve Card — 1.00
 
 **Repo:** [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney)
 
-Service-Name: `givve Card`. Portal: `card.givve.com`, API: `www.givve.com`.
+Service-Name / Dateiname: `Givve Card` / `Givve Card.lua` (Title Case).
+Portal: `card.givve.com`, API: `www.givve.com`.
 Login E-Mail/Passwort + E-Mail-OTP (`POST /api/authorizations`,
 `client_id=givve-card-web`). Host-Allowlist: `card.givve.com`, `www.givve.com`.
-Kontonummer `givve.<email-mit-punkt-statt-at>`; Multi-Login über
-`connectionsByAccount`. Saldo/Umsätze über `voucher_owners/me/vouchers` und
-`transaction_groups`.
+Kontonummer `givve.<voucherId>`; Anzeigename mit last4 + E-Mail; ein Konto
+pro Voucher. Multi-Login über `connectionsByAccount`.
+
+---
+
+## Pluxee — 0.91 Beta
+
+**Repo:** [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney)
+
+Service-Name: `Pluxee`. Portal: `consumers.pluxee.de`, OIDC:
+`connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`. Login E-Mail/OTP
+(Passwort nur wenn Formularfeld); invisible hCaptcha blockiert Erstlogin aus
+Lua → expliziter Fehler; Token-Reuse über `connectionsByAccount`. Kontonummer
+`pluxee.<last4>`; Saldo/Umsätze `GET /v2/de/cards` und `…/transactions`.
 
 ---
 
