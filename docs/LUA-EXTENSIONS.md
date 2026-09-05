@@ -56,7 +56,7 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
-## Givve Prepaid — 1.05
+## Givve Prepaid — 1.00
 
 **Repo:** [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney)
 
