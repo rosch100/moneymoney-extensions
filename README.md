@@ -1,53 +1,53 @@
 # MoneyMoney Extensions Hub
 
-Gemeinsame Tools und Dokumentation für [MoneyMoney](https://moneymoney.app)-Web-Banking-Extensions.
+Gemeinsame Tools und Dokumentation für [MoneyMoney](https://moneymoney.app)-Web-Banking-Erweiterungen.
 
 Repository: https://github.com/rosch100/moneymoney-extensions
 
-Die **Lua-Extensions selbst** liegen in eigenen Repositories (siehe Übersicht).
-Dieses Hub behält MoneyMoney Helper, Cookie-Export-Skripte und den Docs-Index.
+Die **Lua-Erweiterungen** liegen in eigenen Repositories (siehe Übersicht).
+Dieses Hub enthält den MoneyMoney Helper, Cookie-Export-Skripte und den Docs-Index.
 
 ## Signiert vs. Eigenrepos
 
-Die Lua-Dateien in den Eigenrepos sind **unsigniert**. Eine ggf. über
+Die Lua-Dateien in den Eigenrepos sind **unsigniert**. Eine über
 [MoneyMoney Extensions](https://moneymoney.app/extensions/) veröffentlichte
 **signierte** Version entspricht **nicht** automatisch dem Stand aus dem
 jeweiligen `rosch100`-Repository.
 
-Unsignierte Plugins setzen voraus: MoneyMoney-**Beta** und deaktivierte
+Unsignierte Plugins brauchen MoneyMoney-**Beta** und deaktivierte
 Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 ## Übersicht
 
-| Extension | Repo | Version | Status |
-|-----------|------|---------|--------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.01** | Service *Amazon Bestellungen*; Umsätze (amazon.de) |
-| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import; Username/Passwort (Sparta) wenn Engine-API da |
-| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import (Username/Passwort in Lua: Akamai-Blocker) |
-| [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Service/Datei *Givve Prepaid*; E-Mail/Passwort + E-Mail-OTP; Umsätze Builtin-nah; ein Konto pro Voucher (`card.givve.com` / API `www.givve.com`) |
-| [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.00** | Service/Datei *Pluxee Benefits*; E-Mail/OTP/hCaptcha; Konto pro Benefit (`consumers.pluxee.de` / BFF) |
-| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.92 Beta** | Cookie-Import; JWE (OAEP-SHA-512/`aes256gcm`) oder Klartext |
-| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Username/Passwort + MFA; Cookie optional; Private-Device überlebt Neustart |
-| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.03** | Username/Passwort + DOB + MFA; Cookie optional |
+| Erweiterung | Repository | Version | Kurz |
+|-------------|------------|---------|------|
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.01** | Bestellungen von amazon.de |
+| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import |
+| [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import |
+| [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Prepaid-Karten, E-Mail/Passwort und E-Mail-Code |
+| [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.00** | Benefits, E-Mail, Captcha und E-Mail-Code |
+| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.92 Beta** | Kundenportal; Cookie oder Login |
+| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Login und MFA; Cookie optional |
+| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.04** | Login, Geburtsdatum und MFA; Cookie optional |
 
-**Multi-Login:** Dieselbe Extension mehrfach mit unterschiedlichen Zugangsdaten
-anlegen. Sessions werden über `LocalStorage.connectionsByAccount` (bzw. Amazon
-`LocalStorage.logins`) pro Login isoliert — siehe
-[docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md).
+**Mehrere Logins:** Dieselbe Erweiterung mehrfach mit unterschiedlichen
+Zugangsdaten anlegen — jeder Bankzugang hat seine eigene Sitzung.
 
-**MLP Bank vs. MLP Versicherungen:** FinTS-Giro (MLP Bank) ist ein separates
-MoneyMoney-Produkt. Die Extension deckt nur Versicherungsverträge über
-`vue.mlp.de` ab.
+**MLP Bank vs. MLP Versicherungen:** Das FinTS-Giro der MLP Bank ist ein
+separates MoneyMoney-Produkt. Diese Erweiterung betrifft nur
+Versicherungsverträge im Kundenportal.
 
-Kurzindex und technische Notizen: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
+Technische Details und Tests: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
 
 ## Installation
 
-1. `.lua` aus dem jeweiligen Eigenrepo klonen oder Raw-URL laden
+1. `.lua` aus dem jeweiligen Eigenrepo laden
 2. Nach `~/Library/Containers/com.moneymoney-app.retail/Data/Library/Application Support/MoneyMoney/Extensions/` kopieren (oder `./link_ext.sh` im Eigenrepo)
-3. Signaturprüfung in MoneyMoney deaktivieren; Beta nutzen
+3. Signaturprüfung in MoneyMoney ausschalten; Beta nutzen
 
-## Cookie-Import (Beta-Extensions)
+Details stehen in der README des jeweiligen Plugins.
+
+## Cookie-Import (Beta-Erweiterungen)
 
 Passwortfeld in MoneyMoney:
 
@@ -55,18 +55,23 @@ Passwortfeld in MoneyMoney:
 COOKIE:name=value;name2=value2
 ```
 
-### Ablauf (empfohlen: Safari Extension)
+### Ablauf (empfohlen: MoneyMoney Helper)
 
 1. Im Browser vollständig einloggen (inkl. MFA)
-2. Kontoseite / Vertragsübersicht öffnen
-3. Cookies mit der **MoneyMoney Helper**-Extension kopieren (siehe unten)
+2. Kontoseite bzw. Vertragsübersicht öffnen
+3. Cookies mit der **MoneyMoney Helper**-Erweiterung kopieren
 4. `COOKIE:…`-String als Passwort in MoneyMoney einfügen
 
-### 1. Safari Extension (empfohlen)
+### 1. Browser-Erweiterung (empfohlen)
 
-1. Extension bauen/starten: siehe [browser-extension/README.md](browser-extension/README.md)
+1. Installation: [browser-extension/README.md](browser-extension/README.md)
 2. Safari → **Einstellungen → Erweiterungen** → **MoneyMoney Helper** aktivieren
+   (bzw. in Chrome/Firefox die entpackte Erweiterung laden)
 3. Bank-Seite öffnen; Cookies kopieren; in MoneyMoney einfügen
+
+Der Helper unterstützt derzeit **Bank of America**, **Fidelity** und
+**MLP Versicherungen**. Presidential Bank und Shareview: Cookies manuell oder
+per HAR (siehe unten).
 
 ### 2. Export per HAR (Alternative)
 
@@ -87,13 +92,17 @@ COOKIE:name=value;name2=value2
 | Dokument | Inhalt |
 |----------|--------|
 | [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
-| [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper |
-| [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Hub-Index der Extensions |
+| [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper (Nutzer) |
+| [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Technik, Tests, Amazon-Einstellungen |
 | [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Engine-API-Lücken / Roadmap |
+| [docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md) | Multi-Login (Design) |
 
 ## Entwicklung (Hub)
 
-Lokal: Lua 5.4, Python 3.11. Extension-Tests liegen in den Eigenrepos.
+Lokal: Lua 5.4, Python 3.11. Extension-Tests liegen in den Eigenrepos
+(Befehle: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md)).
+
+Hub-Tests:
 
 ```bash
 python3 tests/test_external_scripts_conformance.py
@@ -102,6 +111,15 @@ python3 tests/test_cookie_export_config.py
 python3 tests/test_browser_extension_manifest.py
 node tests/test_cookie_export.mjs
 ```
+
+MoneyMoney Helper: Konfiguration und Logik unter `browser-extension/`. Nach
+Änderungen Safari-Ressourcen syncen:
+
+```bash
+python3 scripts/sync_safari_extension_resources.py
+```
+
+Danach Chrome/Firefox neu laden bzw. Safari per Xcode Run.
 
 CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 

@@ -1,10 +1,12 @@
-# MoneyMoney Helper — Browser Extension
+# MoneyMoney Helper — Browser-Erweiterung
 
-WebExtension (Manifest V3) für Chrome, Edge, Brave, Firefox und Safari.
+Kopiert Session-Cookies aus dem Browser ins Passwortfeld von MoneyMoney
+(`COOKIE:…`). Für Chrome, Edge, Brave, Firefox und Safari.
 
-## Warum Extension statt Userscript?
+## Warum eine Erweiterung?
 
-Session-Cookies wie `SMSESSION`, `ATC` oder `VUSESSIONID` sind **HttpOnly**. Userscripts sehen sie oft nicht (besonders in Safari). Die Extension nutzt die offizielle `cookies`-API des Browsers.
+Viele Session-Cookies sind für Skripte unsichtbar. Die Erweiterung liest sie
+über die Cookie-Schnittstelle des Browsers.
 
 ## Installation
 
@@ -21,11 +23,9 @@ Session-Cookies wie `SMSESSION`, `ATC` oder `VUSESSIONID` sind **HttpOnly**. Use
 
 ### Safari (macOS)
 
-Safari benötigt ein Xcode-Projekt als Hülle. Voraussetzung: **Xcode** oder **Xcode-beta** (nicht nur Command Line Tools).
+Voraussetzung: **Xcode** oder **Xcode-beta** (nicht nur Command Line Tools).
 
-Zuerst WebExtension-Dateien nach Safari syncen (siehe [Entwicklung](#entwicklung)).
-
-Falls `xcode-select` noch auf die Command Line Tools zeigt, auf die installierte Xcode-App umstellen (Pfad anpassen):
+Falls `xcode-select` noch auf die Command Line Tools zeigt:
 
 ```bash
 # Standard-Xcode:
@@ -38,72 +38,28 @@ Danach in Xcode:
 
 1. `safari-extension/MoneyMoney Helper/MoneyMoney Helper.xcodeproj` öffnen
 2. Signing → Team auswählen (Apple-ID reicht für lokale Entwicklung)
-3. **Ziel/Destination:** `My Mac` (in der Xcode-Toolbar neben dem Scheme „MoneyMoney Helper“)
-4. **Product → Run** (⌘R) — baut und startet die Hüllen-App
+3. Ziel/Destination: **My Mac**
+4. **Product → Run** (⌘R)
 5. Safari → **Einstellungen → Erweiterungen** → MoneyMoney Helper aktivieren
 
-> Fehler *„Please select an available device…“* → Destination oben in Xcode auf **My Mac** stellen (nicht iPhone/iOS-Simulator).
+Fehler *„Please select an available device…“* → Destination auf **My Mac**
+stellen (nicht iPhone/Simulator).
 
-Alternativ ohne bestehendes Projekt (Xcode installiert):
-
-```bash
-xcrun safari-web-extension-converter browser-extension \
-  --app-name "MoneyMoney Helper" \
-  --swift --copy-resources --project-location safari-extension
-```
+Unter **macOS 26 und neuer:** Erweiterung aktivieren. **„Websites bearbeiten“**
+nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar
+auf der Bank-Seite erlauben.
 
 ## Nutzung
 
-Konfiguriert sind **Bank of America**, **Fidelity** und
-**MLP Versicherungen**. Presidential Bank und Shareview werden von der
-Browser-Extension derzeit nicht exportiert; deren optionaler Cookie-Import
-erfolgt manuell.
+Unterstützt: **Bank of America**, **Fidelity**, **MLP Versicherungen**.
+Presidential Bank und Shareview: Cookies manuell oder über den Hub (HAR).
 
 1. Im Browser einloggen (inkl. MFA)
-2. Kontoseite öffnen (siehe README: bank-spezifische Hinweise)
+2. Kontoseite bzw. Vertragsübersicht öffnen
 3. Extension-Icon → **Cookies kopieren**
-4. In MoneyMoney Passwortfeld einfügen (`COOKIE:…`)
+4. In MoneyMoney als Passwort einfügen (`COOKIE:…`)
 
-## Architektur
+Gemeinsamer Ablauf und HAR-Alternative:
+[Hub — Cookie-Import](https://github.com/rosch100/moneymoney-extensions#cookie-import-beta-extensions).
 
-| Datei | Zweck |
-|-------|--------|
-| `cookie-export-banks.json` | SSOT: Banken, Origins, Cookie-Priorität |
-| `config.js` | JSON laden, `browser`/`chrome`-API |
-| `cookie-export.js` | Sammeln, Formatieren, Validierung |
-| `popup.js` | UI-Logik |
-
-Die Icons liegen bereits unter `browser-extension/icons/` und werden vom
-Xcode-Projekt als Ressourcen verwendet.
-
-## Berechtigungen (Minimalprinzip)
-
-- `cookies` — lesen (kein Schreiben)
-- `host_permissions` — konkrete Origins aus `cookie-export-banks.json` (keine `*.domain`-Wildcards; Safari 26 und neuer crasht sonst in Websites Preferences); Cookie-Abfrage nur über diese Origins
-- Kein `activeTab`, kein `clipboardWrite` (Clipboard via Nutzerklick im Popup)
-
-**Neue Bank oder Subdomain:** Jede Hostname, von der Session-Cookies gelesen werden müssen, braucht einen eigenen `https://`-Eintrag in `origins` (und damit in `host_permissions`). `session_host` muss in `origins` enthalten sein. Danach `python3 scripts/sync_safari_extension_resources.py` ausführen.
-
-### Safari / macOS 26 und neuer
-
-Extension in **Safari → Einstellungen → Erweiterungen** aktivieren. **„Websites bearbeiten“ / Edit Websites** nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar auf der Bank-Seite erlauben.
-
-## Entwicklung
-
-Konfiguration oder Logik in `browser-extension/` geändert:
-
-```bash
-python3 scripts/sync_safari_extension_resources.py
-```
-
-Danach Chrome/Firefox neu laden bzw. Safari per Xcode Run. Das Sync-Skript leitet `host_permissions` aus `cookie-export-banks.json` ab, kopiert Shared Resources und entfernt verwaiste Safari-Dateien.
-
-Tests:
-
-```bash
-python3 tests/test_browser_extension_manifest.py
-python3 tests/test_cookie_export_config.py
-node tests/test_cookie_export.mjs
-python3 tests/test_external_scripts_conformance.py
-python3 tests/test_workflow_security.py
-```
+Entwicklung und Tests: [Hub — Entwicklung](https://github.com/rosch100/moneymoney-extensions#entwicklung-hub).
