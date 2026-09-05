@@ -56,6 +56,19 @@ möglich (Akamai + MFA) — siehe [ENGINE-API-GAPS.md](ENGINE-API-GAPS.md).
 
 ---
 
+## givve Card — 0.91 Beta
+
+**Repo:** [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney)
+
+Service-Name: `givve Card`. Portal: `card.givve.com`, API: `www.givve.com`.
+Login E-Mail/Passwort + E-Mail-OTP (`POST /api/authorizations`,
+`client_id=givve-card-web`). Host-Allowlist: `card.givve.com`, `www.givve.com`.
+Kontonummer `givve.<email-mit-punkt-statt-at>`; Multi-Login über
+`connectionsByAccount`. Saldo/Umsätze über `voucher_owners/me/vouchers` und
+`transaction_groups`.
+
+---
+
 ## MLP Versicherungen — Beta 0.91
 
 **Repo:** [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney)
