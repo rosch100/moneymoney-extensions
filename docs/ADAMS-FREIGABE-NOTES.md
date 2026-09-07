@@ -2,6 +2,8 @@
 
 Stand nach Umsetzung der Sicherheitsrückmeldungen und Folge-Feedback (2026-09-07).
 
+**Dateien mit MoneyMoney Signatur:** Hub-Ordner [`Signed/`](../Signed/) — beim Sync in die Eigenrepos bevorzugen.
+
 ## Amazon
 
 - Neuer Service-Name: **Amazon Bestellungen** (nicht „Amazon Orders“, nicht nur „Amazon“)
@@ -12,7 +14,7 @@ Stand nach Umsetzung der Sicherheitsrückmeldungen und Folge-Feedback (2026-09-0
 - Absolute `http(s)://`-URLs werden gegen `https://www.amazon.de` / `baseurl` geprüft; fremde Hosts lösen einen Fehler aus
 - Runtime-Requests (inkl. Form-Actions) und Account-Note-Overrides laufen über dieselbe Host-Prüfung
 - `AccountTypeOther`: Fix kommt mit dem nächsten MoneyMoney-Update (kein Extension-Workaround)
-- Inhalt inkl. Adams-Signatur übernommen; Website-Download bitte unter **`amazon-bestellungen.lua`** bereitstellen
+- Inhalt aus `Signed/amazon-bestellungen.lua` (MoneyMoney Signatur); Website bitte unter diesem Namen
 - Repo: https://github.com/rosch100/Amazon-MoneyMoney
 
 ## Shareview
@@ -28,12 +30,12 @@ Stand nach Umsetzung der Sicherheitsrückmeldungen und Folge-Feedback (2026-09-0
 
 - Version: **1.01**
 - Absolute `resultURL` nur zu `www.presidentialpcbanking.com`
-- Signierte Datei von Adams in GitHub übernommen
+- Signierte Datei aus `Signed/` in GitHub übernommen
 - Eigenes Repo: https://github.com/rosch100/Presidential-Bank-MoneyMoney
 
 ## Pluxee Benefits
 
-- Signierte Datei von Adams in GitHub übernommen
+- Signierte Datei aus `Signed/` in GitHub übernommen
 - Repo: https://github.com/rosch100/Pluxee-MoneyMoney
 
 ## Bank of America
@@ -41,7 +43,8 @@ Stand nach Umsetzung der Sicherheitsrückmeldungen und Folge-Feedback (2026-09-0
 - Request-URL-Allowlist `secure.bankofamerica.com`
 - Base64-API korrigiert: MoneyMoney bietet **`MM.base64`** und **`MM.base64decode`**
   (nicht `MM.base64Encode` / `MM.base64encode` / `MM.base64Decode`)
-- Nach dem Base64-Fix muss Adams die Datei **neu signieren** (alte Signatur passt nicht mehr)
+- `Signed/Bank of America.lua` **nicht** 1:1 übernommen (noch alte Base64-Namen);
+  nach Neusignierung `Signed/` aktualisieren und ins Repo kopieren
 - Repo: https://github.com/rosch100/Bank-of-America-MoneyMoney
 
 ## Weitere Eigenrepos

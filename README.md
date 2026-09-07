@@ -9,13 +9,17 @@ Dieses Hub enthält den MoneyMoney Helper, Cookie-Export-Skripte und den Docs-In
 
 ## Signiert vs. Eigenrepos
 
-Die Lua-Dateien in den Eigenrepos sind **unsigniert**. Eine über
-[MoneyMoney Extensions](https://moneymoney.app/extensions/) veröffentlichte
-**signierte** Version entspricht **nicht** automatisch dem Stand aus dem
-jeweiligen `rosch100`-Repository.
+Aktuelle **MoneyMoney Signaturen** (Freigabe) liegen unter [`Signed/`](Signed/)
+und sind in den betroffenen Eigenrepos übernommen, soweit der Stand passt
+(Amazon, Presidential Bank, Pluxee Benefits). Bank of America ist im Repo
+nach dem Base64-API-Fix noch **ohne** aktuelle Signatur — siehe
+[`Signed/README.md`](Signed/README.md).
 
-Unsignierte Plugins brauchen MoneyMoney-**Beta** und deaktivierte
-Signaturprüfung (*MoneyMoney → Einstellungen → Erweiterungen*).
+Website-Downloads auf [MoneyMoney Extensions](https://moneymoney.app/extensions/)
+können dem GitHub-Stand vorauseilen oder hinterherhinken; Abgleich über `Signed/`.
+
+Entwicklungsstände ohne gültige Signatur: MoneyMoney-**Beta** und Signaturprüfung
+aus (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 ## Übersicht
 
@@ -94,6 +98,8 @@ per HAR (siehe unten).
 | [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
 | [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper (Nutzer) |
 | [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Technik, Tests, Amazon-Einstellungen |
+| [Signed/](Signed/) | Dateien mit MoneyMoney Signatur (Drop/Sync) |
+| [docs/ADAMS-FREIGABE-NOTES.md](docs/ADAMS-FREIGABE-NOTES.md) | Freigabe-Notizen (Adams) |
 | [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Engine-API-Lücken / Roadmap |
 | [docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md) | Multi-Login (Design) |
 
