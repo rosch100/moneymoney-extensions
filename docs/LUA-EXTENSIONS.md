@@ -37,6 +37,7 @@ Logins. Sessions: `LocalStorage.connectionsByAccount` bzw. Amazon
 
 **Repo:** [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney)
 
+Dateiname: `amazon-bestellungen.lua` (nicht `amazon-orders.lua` — Kollision mit Beutling).
 Service-Name: `Amazon Bestellungen` (nicht `Amazon Orders`; nicht nur `Amazon`,
 wegen Kollision mit MoneyMoney’s Amazon-Kreditkarte).
 Host-Whitelist: `www.amazon.de`.
@@ -45,7 +46,8 @@ Multi-Login: Harvest-/Cache-State in `LocalStorage.logins[<email>]`.
 
 Konten: gemeinsames Konto **Amazon** (Nummer = Login-E-Mail); bei persönlich +
 geschäftlich zusätzlich Unterkonten mit Personen- bzw. Firmennamen
-(Nummer = `AO.` + Kunden-ID ohne führendes `A`). Kontoart *Sonstige*.
+(Nummer = `AO.` + Kunden-ID ohne führendes `A`). Kontoart *Sonstige*
+(`AccountTypeOther`-Fix kommt mit dem nächsten MoneyMoney-Update).
 Alt-Services/-Nummern (`Amazon`, `mix` / `sub:*` / `normal` / …) werden nicht
 mehr aktualisiert.
 
