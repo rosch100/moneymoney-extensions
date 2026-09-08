@@ -37,5 +37,9 @@ reviews:
     opengrep:
       enabled: true
 
+  pre_merge_checks:
+    docstrings:
+      mode: off
+
 chat:
   auto_reply: true
