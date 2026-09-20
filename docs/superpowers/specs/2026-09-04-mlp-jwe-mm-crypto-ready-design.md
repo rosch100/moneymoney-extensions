@@ -5,7 +5,8 @@
 ## Goal
 
 MLP-JWE (`alg=RSA-OAEP-512`, `enc=A256GCM`) nur mit korrektem Padding und
-`MM.aes256gcm`, sobald MoneyMoney die angekündigten APIs liefert.
+`MM.aes256encrypt(…, "aes256 gcm", aad)`, sobald MoneyMoney die APIs liefert
+(ab 2.5.2 dokumentiert).
 
 ## Problem
 
@@ -16,7 +17,7 @@ weiterhin `RSA-OAEP-512` behauptete.
 
 1. CEK-Verschlüsselung nur mit `"pkcs1-oaep sha512"`.
 2. JWE-Capability: `MM.random`, `MM.base64urlencode`, `MM.rsaEncrypt`,
-   `MM.aes256gcm`/`aesgcm`, und erfolgreicher OAEP-SHA-512-Probe.
+   `MM.aes256encrypt` mit `"aes256 gcm"`, und erfolgreicher OAEP-SHA-512-Probe.
 3. Login: JWE wenn ready; sonst Klartext, dann Cookie (unverändert).
 4. Scope: nur MLP (+ Hub-Docs). BoA/Fidelity nicht betroffen.
 
