@@ -170,6 +170,8 @@ Service-Name / Dateiname: `Pluxee Benefits` / `Pluxee Benefits.lua`.
 Portal: `consumers.pluxee.de`, OIDC: `connect.pluxee.app`, BFF: `api.pluxee.app/gl/eva/bff`.
 Login E-Mail / invisible hCaptcha / OTP (Passwort nur wenn Formularfeld);
 OAuth-`state` und Host-Allowlist; Token-Reuse über `connectionsByAccount`.
+PKCE (S256) über `MM.random` / `MM.sha256`+`MM.hexToBin` / `MM.base64urlencode`
+(MoneyMoney ≥ 2.5.2).
 Kontonummer = API-`maskedPan` (bei gleicher PAN Suffix `benefitId`);
 Anzeigename ein Konto `{Benefit-Name}`, mehrere `{Benefit-Name} {last4}`;
 ein Konto **pro Benefit**; Umsätze nur `APPROVED`, gefiltert über
