@@ -98,10 +98,12 @@ per HAR (siehe unten).
 | [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
 | [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper (Nutzer) |
 | [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Technik, Tests, Amazon-Einstellungen |
+| [docs/issue-templates/](docs/issue-templates/) | Issue-Forms-SSOT (Bug/Feature) für Plugin-Repos |
 | [Signed/](Signed/) | Dateien mit MoneyMoney Signatur (Drop/Sync) |
 | [docs/ADAMS-FREIGABE-NOTES.md](docs/ADAMS-FREIGABE-NOTES.md) | Freigabe-Notizen (Adams) |
 | [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Engine-API-Lücken / Roadmap |
 | [docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md) | Multi-Login (Design) |
+| [docs/superpowers/specs/2026-09-06-github-issue-templates-design.md](docs/superpowers/specs/2026-09-06-github-issue-templates-design.md) | Issue-Templates (Design) |
 
 ## Entwicklung (Hub)
 
