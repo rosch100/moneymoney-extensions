@@ -2,16 +2,17 @@
 
 Datum: 2026-09-06
 
-Status: **Design freigegeben** (Brainstorming)
+Status: **Implementiert** (2026-09-20); Conformity-Remediation 2026-09-20
 
 ## Ziel
 
 Für alle acht Lua-Plugin-Repositories einheitliche, deutschsprachige
 GitHub Issue Forms (Bug + Feature) bereitstellen. Melder werden zu
-LUA-/Web-Banking-relevanten Angaben geführt. MoneyMoney-Logs und
+Lua-/Web-Banking-relevanten Angaben geführt. MoneyMoney-Logs und
 vertrauliche Daten sind explizit und nach Best Practice geregelt:
-verschlüsselte Logdateien dem Maintainer nicht nutzbar machen und
-nicht anhängen; nur redigierte Protokoll-Ausschnitte bzw. Screenshots.
+Logdateien nicht anhängen; verschlüsselte App-Logs sind für Maintainer
+nicht nutzbar; nur redigierte Protokollfenster-Ausschnitte bzw.
+Screenshots.
 
 ## Entscheidungen (fest)
 
@@ -22,7 +23,7 @@ nicht anhängen; nur redigierte Protokoll-Ausschnitte bzw. Screenshots.
 | Pflege | SSOT im Hub + Sync in die Plugin-Repos; knapper README-Link |
 | Sprache | Nur Deutsch |
 | Form | GitHub Issue Forms (YAML) |
-| Diagnose | Keine verschlüsselten Logs; redigierte Protokollfenster-Ausschnitte und/oder Screenshots |
+| Diagnose | Keine Logdatei-Anhänge; redigierte Protokollfenster-Ausschnitte und/oder Screenshots |
 
 ## Scope
 
@@ -40,8 +41,11 @@ nicht anhängen; nur redigierte Protokoll-Ausschnitte bzw. Screenshots.
 ### Hub
 
 - SSOT unter `docs/issue-templates/`
-- Sync-Skript (pwsh), das die YAML-Dateien in die lokalen Plugin-Checkouts kopiert
+- Sync-Skript `scripts/Sync-IssueTemplates.ps1` (`#Requires -Version 7`),
+  das die YAML-Dateien in die lokalen Plugin-Checkouts kopiert
 - Kein automatischer Commit/Push in die Plugin-Repos
+- Hub selbst erhält **keine** Issue-Templates (Issues bleiben in den
+  Plugin-Repos)
 
 ### Nicht-Ziele
 
@@ -60,7 +64,7 @@ nicht anhängen; nur redigierte Protokoll-Ausschnitte bzw. Screenshots.
 | `bug_report.yml` | Bug-Form |
 | `feature_request.yml` | Feature-Form |
 | `config.yml` | Template-Auswahl; Blank Issues aus |
-| `README.md` | Pflegehinweis und Sync-Anleitung |
+| `README.md` | Pflege, Sync-Aufruf, Maintainer-Antwortvorlage |
 
 ### Pro Plugin
 
@@ -71,15 +75,18 @@ nicht anhängen; nur redigierte Protokoll-Ausschnitte bzw. Screenshots.
   config.yml
 ```
 
-Inhalt = 1:1-Kopie der Hub-SSOT-YAML (kein plugin-spezifischer Text in den
-Forms, damit Sync trivial bleibt).
+Inhalt der drei YAML-Dateien = 1:1-Kopie der Hub-SSOT-YAML (kein
+plugin-spezifischer Text in den Forms). Die Hub-`README.md` wird
+**nicht** in die Plugin-Repos kopiert.
 
 ### Sync
 
-- Skript z. B. `scripts/Sync-IssueTemplates.ps1` (`#Requires -Version 7`)
-- Quelle: `docs/issue-templates/*.yml`
-- Ziel: jedes `*-MoneyMoney/.github/ISSUE_TEMPLATE/`
+- Skript: `scripts/Sync-IssueTemplates.ps1`
+- Quelle: `docs/issue-templates/{bug_report,feature_request,config}.yml`
+- Ziel: jedes `*-MoneyMoney/.github/ISSUE_TEMPLATE/` (Verzeichnis anlegen
+  falls fehlend)
 - Nur Dateisystem; Commit/Push bleibt manuell je Plugin-Repo
+- Bei fehlendem Plugin-Checkout: Fehler melden, nicht still überspringen
 
 ### README je Plugin
 
@@ -91,40 +98,54 @@ Kein langer Datenschutz-Text in der README (Detail steht im Bug-Template).
 
 ### Hintergrund
 
-MoneyMoney speichert Protokolldateien standardmäßig so, dass sie
-**verschlüsselt** sind und nur MoneyMoney sie lesen kann. Maintainer der
-Community-Plugins können diese Dateien **nicht** entschlüsseln. Anhängen
-solcher Dateien hilft der Diagnose nicht und kann trotzdem
-vertrauliche Inhalte transportieren.
+MoneyMoney führt ein Protokoll (**Fenster → Protokollfenster**). Die von der
+App persistierten Protokolldateien sind für Dritte/Maintainer typischerweise
+**nicht lesbar** (app-seitige Verschlüsselung bzw. nur MoneyMoney-intern
+nutzbar). Community-Maintainer können solche Dateien **nicht** auswerten.
+Anhängen hilft der Diagnose nicht und kann trotzdem vertrauliche Inhalte
+transportieren.
 
-Zusätzlich können Klartext-Ausschnitte aus dem Protokollfenster und
-Screenshots Secrets enthalten (Cookies, Tokens, Kontodaten).
+Das **Protokollfenster** selbst zeigt Klartext. Ausschnitte und Screenshots
+können Secrets enthalten (Cookies, Tokens, Kontodaten) und müssen redigiert
+werden.
+
+Unabhängig vom Dateiformat: **keine** Logdateien an Issues anhängen.
 
 ### Regeln für Melder (im Bug-Template sichtbar)
 
-1. **Keine** MoneyMoney-`.log`-Dateien und keine sonstigen verschlüsselten
-   Diagnose-Archive anhängen.
+1. **Keine** MoneyMoney-`.log`-Dateien und keine sonstigen Diagnose-/Trace-
+   Archive anhängen (verschlüsselt = für Maintainer nutzlos; Klartext =
+   Geheimnisrisiko).
 2. Stattdessen: Text aus **Fenster → Protokollfenster** und/oder Screenshot
    davon — vorher redigieren.
 3. **Nie** posten: Passwörter, Cookie-Strings (`COOKIE:…`), Session-Tokens,
    OTP/TAN, vollständige Kontonummern/IBAN/PAN, unnötige Login-E-Mails,
-   personenbezogene Bestell-/Vertragsdaten, HAR-Dateien mit Auth-Headern.
+   personenbezogene Bestell-/Vertragsdaten, HAR-Dateien, LocalStorage-/
+   webCache-Dumps, Roh-Exports aus dem MoneyMoney Helper.
 4. **Erlaubt** nach Redaktion: Extension-Fehlermeldungen, URLs ohne
    Query-Secrets, HTTP-Status, kurze `print`-Zeilen, MoneyMoney- und
    Extension-Version, OS-Version, Reproduktionsschritte.
 
 ### Feature-Template
 
-Kein Log-Upload. Pflicht-Checkbox: keine Zugangsdaten und keine
-personenbezogenen Beispieldaten.
+Kurzer Markdown-Hinweis: keine Logs, keine Zugangsdaten.
+Pflicht-Checkbox: keine Zugangsdaten und keine personenbezogenen
+Beispieldaten.
 
-### Maintainer-Hinweis (SSOT-README)
+### Maintainer-Antwortvorlage (Pflichtinhalt der SSOT-`README.md`)
 
-Wenn trotz Hinweis eine Logdatei angehängt wird: Issue kommentieren, dass
-die Datei nicht lesbar/nutzbar ist, und um redigierten Protokoll-Ausschnitt
-bitten; Anhang nicht weiterverbreiten.
+Wenn trotz Hinweis eine Logdatei oder Secrets angehängt werden:
+
+1. Issue kommentieren: Anhang ist für Maintainer nicht auswertbar bzw.
+   enthält mutmaßlich Vertrauliches.
+2. Um redigierten Protokollfenster-Ausschnitt (Text) bitten.
+3. Anhang nicht weiterverbreiten; Melder bitten, den Anhang zu entfernen
+   bzw. das Issue zu bereinigen.
 
 ## Bug-Formular (`bug_report.yml`)
+
+Form-Metadaten (GitHub-Pflicht): `name`, `description`, `title` (Prefix
+z. B. `"[Bug]: "`), `labels: [bug]`, `body`.
 
 | Element | Typ | Pflicht |
 | --- | --- | --- |
@@ -139,26 +160,29 @@ bitten; Anhang nicht weiterverbreiten.
 | Auth-Weg | dropdown: Username/Passwort, Cookie-Import, MFA, unklar | ja |
 | Redigierter Protokoll-Ausschnitt / Screenshot-Hinweis | textarea | nein |
 | Bestätigung: keine Secrets | checkboxes | ja |
-| Bestätigung: keine verschlüsselte Logdatei | checkboxes | ja |
+| Bestätigung: keine Logdatei angehängt | checkboxes | ja |
 | Bestätigung: Inhalte redigiert | checkboxes | ja |
 
-Labels (sofern im Repo vorhanden): `bug`. Fehlen Labels, Forms ohne
-Label-Referenz oder nur dokumentiert — Sync darf keine fehlschlagenden
-Label-IDs erzwingen; `labels: [bug]` nur wenn alle Repos das Label haben
-oder GitHub fehlende Labels ignoriert. **Umsetzung:** Labels in den Forms
-setzen; fehlende Labels einmalig in den Repos anlegen (`bug`, `enhancement`).
+### Labels
+
+Vor dem ersten produktiven Issue in jedem Plugin-Repo die Labels `bug` und
+`enhancement` anlegen (GitHub UI oder `gh label create`). Die Forms setzen
+`labels: [bug]` bzw. `labels: [enhancement]`. Keine alternative
+„ohne Labels“-Variante — eine Policy, keine Verzweigung.
 
 ## Feature-Formular (`feature_request.yml`)
 
+Form-Metadaten: `name`, `description`, `title` (Prefix z. B.
+`"[Feature]: "`), `labels: [enhancement]`, `body`.
+
 | Element | Typ | Pflicht |
 | --- | --- | --- |
+| Datenschutz-Kurzhinweis | markdown | — |
 | Problem / Motivation | textarea | ja |
 | Vorgeschlagene Lösung | textarea | ja |
 | Alternativen | textarea | nein |
 | Betroffener Ablauf | dropdown: Login, Kontenliste, Abruf/Umsätze, Cookie-Import, Sonstiges | nein |
 | Keine Zugangsdaten / keine personenbezogenen Beispiele | checkboxes | ja |
-
-Label: `enhancement` (siehe Label-Hinweis oben).
 
 ## `config.yml`
 
@@ -172,14 +196,18 @@ contact_links:
 
 ## Akzeptanzkriterien
 
-1. Hub enthält SSOT-YAML + Pflege-README + Sync-Skript.
+1. Hub enthält SSOT-YAML + Pflege-README (inkl. Maintainer-Antwortvorlage)
+   + `scripts/Sync-IssueTemplates.ps1`.
 2. Alle acht Plugin-Repos haben `.github/ISSUE_TEMPLATE/` mit denselben
    drei YAML-Dateien.
 3. „New issue“ zeigt Bug- und Feature-Form; Blank Issues sind aus.
-4. Bug-Form nennt explizit: verschlüsselte Logs unbrauchbar für Maintainer;
-   Verbot von Secrets und Log-Anhängen; redigierte Alternativen.
+4. Bug-Form nennt explizit: Logdateien nicht anhängen; verschlüsselte/
+   app-interne Logs für Maintainer nicht auswertbar; Verbot von Secrets;
+   redigierte Protokollfenster-Alternativen.
 5. Jede Plugin-README verlinkt auf `issues/new/choose`.
-6. Keine Secrets oder Klartext-Beispiele mit echten Credentials in den
+6. Hub-README bzw. Docs-Index verweist auf `docs/issue-templates/`.
+7. Labels `bug` und `enhancement` existieren in allen acht Plugin-Repos.
+8. Keine Secrets oder Klartext-Beispiele mit echten Credentials in den
    Templates.
 
 ## Risiken
@@ -188,13 +216,14 @@ contact_links:
 | --- | --- |
 | Drift zwischen Hub und Plugins | Sync-Skript; SSOT nur im Hub ändern |
 | Melder hängen trotzdem Logs an | Template-Text + Maintainer-Antwortvorlage in SSOT-README |
-| Label fehlen in manchen Repos | Labels `bug` / `enhancement` vor erstem Issue anlegen |
+| Label fehlen in manchen Repos | Labels vor Rollout anlegen (Akzeptanzkriterium 7) |
 | Plugin-Repos sind eigene Gits | Sync nur lokal; Commit pro Repo bewusst |
+| Klartext-Logs wirken „hilfreich“ | Template: jede Logdatei verboten, nicht nur „verschlüsselte“ |
 
 ## Umsetzungsreihenfolge (für Plan)
 
-1. Hub-SSOT und Sync-Skript anlegen
+1. Hub-SSOT und `scripts/Sync-IssueTemplates.ps1` anlegen
 2. Templates in alle acht Plugin-Checkouts synchronisieren
-3. Labels prüfen/anlegen
+3. Labels `bug` / `enhancement` prüfen/anlegen
 4. README-Abschnitte in allen Plugins
 5. Kurzverweis im Hub-README/Docs-Index auf `docs/issue-templates/`
