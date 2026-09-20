@@ -23,6 +23,25 @@ def main() -> None:
             workflow_dir.glob("*.yaml"),
         )
     }
+    required_workflows = (
+        "ci.yml",
+        "security.yml",
+        "moneymoney-script-conformance.yml",
+        "scorecard.yml",
+        "codeql.yml",
+        "dependency-review.yml",
+        "actionlint.yml",
+    )
+    for workflow_name in required_workflows:
+        assert_true(
+            workflow_name in workflow_texts,
+            f"fehlender Best-Practice-Workflow: {workflow_name}",
+        )
+    dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
+    assert_true(
+        "package-ecosystem: github-actions" in dependabot,
+        "Dependabot muss GitHub Actions wöchentlich aktualisieren",
+    )
     for workflow_name, workflow in workflow_texts.items():
         action_refs = re.findall(r"(?m)^\s*uses:\s*[^@\s]+@([^\s#]+)", workflow)
         assert_true(
