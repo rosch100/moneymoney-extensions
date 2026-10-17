@@ -12,7 +12,7 @@ Dieses Hub enthält den MoneyMoney Helper und Cookie-Export-Skripte.
 Aktuelle **MoneyMoney Signaturen** liegen unter [`Signed/`](Signed/) und sind
 mit den Website-Downloads abgeglichen (Amazon **2.01**, Bank of America **0.92**,
 Givve **1.00**, Pluxee **1.01**, Presidential **1.09**, Shareview **1.04**).
-Amazon Eigenrepo ist **2.04** (Website noch 2.01).
+Amazon Eigenrepo ist **2.05** (Website noch 2.01).
 Fidelity und MLP Versicherungen folgen mit dem nächsten MoneyMoney-Update
 (Whitelist) — siehe [`Signed/README.md`](Signed/README.md).
 
@@ -26,7 +26,7 @@ aus (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Erweiterung | Repository | Version | Kurz |
 |-------------|------------|---------|------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.04** (Website noch 2.01) | Bestellungen von amazon.de |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.05** (Website noch 2.01) | Bestellungen von amazon.de |
 | [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import |
 | [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Prepaid-Karten, E-Mail/Passwort und E-Mail-Code |
