@@ -8,8 +8,7 @@ Stand: Website-Downloads von [MoneyMoney Extensions](https://moneymoney.app/exte
 
 | Datei hier | Ziel-Repo | Hinweis |
 | --- | --- | --- |
-| `amazon-bestellungen.lua` | Amazon-MoneyMoney | Website **2.01** (signiert) |
-| → siehe [`pending/`](pending/) | Amazon-MoneyMoney | **2.04** unsigniert, zur Neusignierung |
+| `amazon-bestellungen.lua` | Amazon-MoneyMoney | Website **2.01** (signiert); Eigenrepo kann voraus sein |
 | `Bank of America.lua` | Bank-of-America-MoneyMoney | 1:1 Website (**0.92**, `MM.base64` / `MM.base64decode`) |
 | `Givve Prepaid.lua` | Givve-MoneyMoney | 1:1 Website (**1.00**) |
 | `Pluxee Benefits.lua` | Pluxee-MoneyMoney | 1:1 Website (**1.01**) |

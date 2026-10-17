@@ -16,8 +16,13 @@
 **/__pycache__/
 *.pyc
 
-# Lokale Reverse-Engineering-Referenz (nicht veröffentlichen)
+# Lokale Notizen (nicht veröffentlichen)
 /docs/UNDOCUMENTED-MM-LUA-API.md
+/docs/ADAMS-FREIGABE-NOTES.md
+/docs/ENGINE-API-GAPS.md
+/docs/LUA-EXTENSIONS.md
+/docs/superpowers/
+/Signed/pending/
 
 # Xcode: benutzerspezifische UI/Workspace-States
 safari-extension/**/xcuserdata/

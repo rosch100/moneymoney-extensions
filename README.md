@@ -5,17 +5,16 @@ Gemeinsame Tools und Dokumentation für [MoneyMoney](https://moneymoney.app)-Web
 Repository: https://github.com/rosch100/moneymoney-extensions
 
 Die **Lua-Erweiterungen** liegen in eigenen Repositories (siehe Übersicht).
-Dieses Hub enthält den MoneyMoney Helper, Cookie-Export-Skripte und den Docs-Index.
+Dieses Hub enthält den MoneyMoney Helper und Cookie-Export-Skripte.
 
 ## Signiert vs. Eigenrepos
 
 Aktuelle **MoneyMoney Signaturen** liegen unter [`Signed/`](Signed/) und sind
 mit den Website-Downloads abgeglichen (Amazon **2.01**, Bank of America **0.92**,
 Givve **1.00**, Pluxee **1.01**, Presidential **1.09**, Shareview **1.04**).
-Amazon Eigenrepo **2.04** unsigniert: [`Signed/pending/`](Signed/pending/).
+Amazon Eigenrepo ist **2.04** (Website noch 2.01).
 Fidelity und MLP Versicherungen folgen mit dem nächsten MoneyMoney-Update
-(Whitelist) — siehe [`Signed/README.md`](Signed/README.md) und
-[`docs/ADAMS-FREIGABE-NOTES.md`](docs/ADAMS-FREIGABE-NOTES.md).
+(Whitelist) — siehe [`Signed/README.md`](Signed/README.md).
 
 Website-Downloads auf [MoneyMoney Extensions](https://moneymoney.app/extensions/)
 sind die Referenz für veröffentlichte Stände; Abgleich über `Signed/`.
@@ -42,8 +41,6 @@ Zugangsdaten anlegen — jeder Bankzugang hat seine eigene Sitzung.
 **MLP Bank vs. MLP Versicherungen:** Das FinTS-Giro der MLP Bank ist ein
 separates MoneyMoney-Produkt. Diese Erweiterung betrifft nur
 Versicherungsverträge im Kundenportal.
-
-Technische Details und Tests: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md).
 
 ## Installation
 
@@ -99,18 +96,11 @@ per HAR (siehe unten).
 |----------|--------|
 | [MoneyMoney Web Banking API](https://moneymoney.app/api/webbanking/) | Offizielle Extension-API |
 | [browser-extension/README.md](browser-extension/README.md) | MoneyMoney Helper (Nutzer) |
-| [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md) | Technik, Tests, Amazon-Einstellungen |
-| [docs/issue-templates/](docs/issue-templates/) | Issue-Forms-SSOT (Bug/Feature) für Plugin-Repos |
-| [Signed/](Signed/) | Dateien mit MoneyMoney Signatur (Drop/Sync) |
-| [docs/ADAMS-FREIGABE-NOTES.md](docs/ADAMS-FREIGABE-NOTES.md) | Freigabe-Notizen (Adams) |
-| [docs/ENGINE-API-GAPS.md](docs/ENGINE-API-GAPS.md) | Engine-API-Lücken / Roadmap |
-| [docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md](docs/superpowers/specs/2026-09-04-multi-login-localstorage-design.md) | Multi-Login (Design) |
-| [docs/superpowers/specs/2026-09-06-github-issue-templates-design.md](docs/superpowers/specs/2026-09-06-github-issue-templates-design.md) | Issue-Templates (Design) |
+| [Signed/](Signed/) | Dateien mit MoneyMoney Signatur |
 
 ## Entwicklung (Hub)
 
-Lokal: Lua 5.4, Python 3.11. Extension-Tests liegen in den Eigenrepos
-(Befehle: [docs/LUA-EXTENSIONS.md](docs/LUA-EXTENSIONS.md)).
+Lokal: Lua 5.4, Python 3.11. Extension-Tests liegen in den Eigenrepos.
 
 Hub-Tests:
 
