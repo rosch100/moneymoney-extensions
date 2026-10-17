@@ -756,17 +756,14 @@ function base64Encode(data)
   if type(data) ~= "string" then
     return nil
   end
-  if type(MM.base64Encode) == "function" then
-    return MM.base64Encode(data)
+  if type(MM.base64) ~= "function" then
+    return nil
   end
-  if type(MM.base64encode) == "function" then
-    return MM.base64encode(data)
-  end
-  return nil
+  return MM.base64(data)
 end
 
 function canUseRsaLogin()
-  return type(MM.rsaEncrypt) == "function"
+  return type(MM.rsaEncrypt) == "function" and type(MM.base64) == "function"
 end
 
 function buildLoginFilterRules()
@@ -1322,7 +1319,7 @@ end
 
 function performSpartaPasswordLogin(username, password)
   if not canUseRsaLogin() then
-    return "Bank of America benötigt MM.rsaEncrypt für den Sparta-Login.\n\nCookie-Import: COOKIE:SMSESSION=...;SSOTOKEN=..."
+    return "Bank of America benötigt MM.rsaEncrypt und MM.base64 für den Sparta-Login.\n\nCookie-Import: COOKIE:SMSESSION=...;SSOTOKEN=..."
   end
 
   local sessionKey, keyError = fetchLoginSessionKey()
@@ -2267,11 +2264,15 @@ local function downloadStatementPdf(docId, adxToken)
       return response, nil
     end
     local pdfBase64 = response:match('"pdfData"%s*:%s*"([^"]+)"') or response:match('"documentData"%s*:%s*"([^"]+)"')
-    if pdfBase64 and MM.base64Decode then
-      local pdf = MM.base64Decode(pdfBase64)
+    if pdfBase64 then
+      if type(MM.base64decode) ~= "function" then
+        return nil, "MM.base64decode nicht verfügbar"
+      end
+      local pdf = MM.base64decode(pdfBase64)
       if pdf and pdf:sub(1, 4) == "%PDF" then
         return pdf, nil
       end
+      return nil, "PDF-Base64 konnte nicht dekodiert werden"
     end
   end
 
@@ -2361,4 +2362,4 @@ function DownloadStatement(account, statement)
   return GetStatement(account, statementId)
 end
 
--- SIGNATURE: MCwCFBfNJ5cXUcc+Z2Jnw8m/+TB0bp+IAhRTmVzkPw/5eQjzzkRyHDao0as5BA==
+-- SIGNATURE: MCwCFDWWPf7m2K7TQwMc7x+F4eCEZTaTAhRfiXME1iI5vA14WXl7GLA6SnyiRw==

@@ -9,14 +9,16 @@ Dieses Hub enthält den MoneyMoney Helper, Cookie-Export-Skripte und den Docs-In
 
 ## Signiert vs. Eigenrepos
 
-Aktuelle **MoneyMoney Signaturen** (Freigabe) liegen unter [`Signed/`](Signed/)
-und sind in den betroffenen Eigenrepos übernommen, soweit der Stand passt
-(Amazon, Presidential Bank, Pluxee Benefits). Bank of America ist im Repo
-nach dem Base64-API-Fix noch **ohne** aktuelle Signatur — siehe
-[`Signed/README.md`](Signed/README.md).
+Aktuelle **MoneyMoney Signaturen** liegen unter [`Signed/`](Signed/) und sind
+mit den Website-Downloads abgeglichen (Amazon **2.01**, Bank of America **0.92**,
+Givve **1.00**, Pluxee **1.01**, Presidential **1.09**, Shareview **1.04**).
+Amazon Eigenrepo **2.04** unsigniert: [`Signed/pending/`](Signed/pending/).
+Fidelity und MLP Versicherungen folgen mit dem nächsten MoneyMoney-Update
+(Whitelist) — siehe [`Signed/README.md`](Signed/README.md) und
+[`docs/ADAMS-FREIGABE-NOTES.md`](docs/ADAMS-FREIGABE-NOTES.md).
 
 Website-Downloads auf [MoneyMoney Extensions](https://moneymoney.app/extensions/)
-können dem GitHub-Stand vorauseilen oder hinterherhinken; Abgleich über `Signed/`.
+sind die Referenz für veröffentlichte Stände; Abgleich über `Signed/`.
 
 Entwicklungsstände ohne gültige Signatur: MoneyMoney-**Beta** und Signaturprüfung
 aus (*MoneyMoney → Einstellungen → Erweiterungen*).
@@ -25,11 +27,11 @@ aus (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Erweiterung | Repository | Version | Kurz |
 |-------------|------------|---------|------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.01** | Bestellungen von amazon.de |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.04** (Website noch 2.01) | Bestellungen von amazon.de |
 | [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import |
 | [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Prepaid-Karten, E-Mail/Passwort und E-Mail-Code |
-| [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.00** | Benefits, E-Mail, Captcha und E-Mail-Code |
+| [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.01** | Benefits, E-Mail, Captcha und E-Mail-Code |
 | [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.92 Beta** | Kundenportal; Cookie oder Login |
 | [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Login und MFA; Cookie optional |
 | [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.04** | Login, Geburtsdatum und MFA; Cookie optional |

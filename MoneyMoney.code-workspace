@@ -1,0 +1,32 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "Amazon-MoneyMoney"
+		},
+		{
+			"path": "MLP-Versicherungen-MoneyMoney"
+		},
+		{
+			"path": "Shareview-MoneyMoney"
+		},
+		{
+			"path": "Presidential-Bank-MoneyMoney"
+		},
+		{
+			"path": "Pluxee-MoneyMoney"
+		},
+		{
+			"path": "Givve-MoneyMoney"
+		},
+		{
+			"path": "Fidelity-MoneyMoney"
+		},
+		{
+			"path": "Bank-of-America-MoneyMoney"
+		}
+	],
+	"settings": {}
+}

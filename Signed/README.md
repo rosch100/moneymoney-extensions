@@ -3,11 +3,18 @@
 Drop-Ordner für von MoneyMoney signierte `.lua`-Dateien (Freigabe Michael Adams).
 Beim Übernehmen in die Eigenrepos **diese Dateien bevorzugen** (nicht Mail-Anhänge).
 
+Stand: Website-Downloads von [MoneyMoney Extensions](https://moneymoney.app/extensions/)
+(abgeglichen).
+
 | Datei hier | Ziel-Repo | Hinweis |
 | --- | --- | --- |
-| `amazon-bestellungen.lua` | Amazon-MoneyMoney | früher von Adams als `amazon-orders-2.lua` |
-| `Presidential Bank.lua` | Presidential-Bank-MoneyMoney | 1:1 |
-| `Pluxee Benefits.lua` | Pluxee-MoneyMoney | 1:1 |
-| `Bank of America.lua` | Bank-of-America-MoneyMoney | **nicht** 1:1 übernehmen — enthält noch falsche Base64-APIs; Repo hat `MM.base64` / `MM.base64decode` und braucht Neusignierung |
+| `amazon-bestellungen.lua` | Amazon-MoneyMoney | Website **2.01** (signiert) |
+| → siehe [`pending/`](pending/) | Amazon-MoneyMoney | **2.04** unsigniert, zur Neusignierung |
+| `Bank of America.lua` | Bank-of-America-MoneyMoney | 1:1 Website (**0.92**, `MM.base64` / `MM.base64decode`) |
+| `Givve Prepaid.lua` | Givve-MoneyMoney | 1:1 Website (**1.00**) |
+| `Pluxee Benefits.lua` | Pluxee-MoneyMoney | 1:1 Website (**1.01**) |
+| `Presidential Bank.lua` | Presidential-Bank-MoneyMoney | 1:1 Website (**1.09**) |
+| `Shareview.lua` | Shareview-MoneyMoney | 1:1 Website (**1.04**) |
 
-Nach Neusignierung von BoA die Datei hier ersetzen und ins Eigenrepo kopieren.
+**Noch nicht auf der Website** (Whitelist / nächstes MoneyMoney-Update):
+Fidelity, MLP Versicherungen — nach Veröffentlichung hier ablegen und in die Eigenrepos übernehmen.
