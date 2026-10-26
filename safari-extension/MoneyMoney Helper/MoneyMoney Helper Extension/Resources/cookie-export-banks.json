@@ -49,5 +49,31 @@
       "VUSESSIONID",
       "BIGipServervue.mlp.de"
     ]
+  },
+  "amazon": {
+    "label": "Amazon Bestellungen",
+    "match_host": "(?:^|\\.)amazon\\.de$",
+    "origins": [
+      "https://www.amazon.de",
+      "https://amazon.de"
+    ],
+    "session_host": "www.amazon.de",
+    "critical": ["session-id"],
+    "allow_duplicate_names": [],
+    "priority": [
+      "session-id",
+      "session-id-time",
+      "ubid-acbde",
+      "at-acbde",
+      "at-main",
+      "sess-at-acbde",
+      "sess-at-main",
+      "x-main",
+      "lc-acbde",
+      "csm-hit",
+      "ak_bmsc",
+      "bm_sv",
+      "bm_sz"
+    ]
   }
 }
