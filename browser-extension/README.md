@@ -51,7 +51,7 @@ auf der Bank-Seite erlauben.
 
 ## Nutzung
 
-Unterstützt: **Bank of America**, **Fidelity**, **MLP Versicherungen**.
+Unterstützt: **Bank of America**, **Fidelity**, **MLP Versicherungen**, **Amazon.de**.
 Presidential Bank und Shareview: Cookies manuell oder über den Hub (HAR).
 
 1. Im Browser einloggen (inkl. MFA)

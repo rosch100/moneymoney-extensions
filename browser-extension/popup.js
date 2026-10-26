@@ -44,7 +44,7 @@ async function refresh(banks) {
   if (!bank) {
     setStatus('Bank nicht erkannt', 'error');
     titleEl.textContent = 'MoneyMoney';
-    hintEl.textContent = 'Unterstützt: Fidelity, Bank of America, MLP Versicherungen.';
+    hintEl.textContent = 'Unterstützt: Fidelity, Bank of America, MLP Versicherungen, Amazon.de.';
     copyBtn.disabled = true;
     return;
   }
