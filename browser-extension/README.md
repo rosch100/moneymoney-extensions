@@ -21,33 +21,26 @@ Viele Session-Cookies sind für Skripte unsichtbar. Die Erweiterung liest sie
 1. `about:debugging#/runtime/this-firefox`
 2. **Temporäres Add-on laden** → `browser-extension/manifest.json`
 
-### Safari (macOS)
+### Safari (macOS) — empfohlen: DMG
 
-Voraussetzung: **Xcode** oder **Xcode-beta** (nicht nur Command Line Tools).
+1. [MoneyMoney Helper 0.9 DMG](https://github.com/rosch100/moneymoney-extensions/releases/tag/v0.9) laden und öffnen
+2. **MoneyMoney Helper.app** nach Programme ziehen und einmal starten
+3. Safari → **Einstellungen → Erweiterungen** → MoneyMoney Helper aktivieren
+4. Auf der Bank-/Amazon-Seite Website-Zugriff erlauben (Toolbar)
 
-Falls `xcode-select` noch auf die Command Line Tools zeigt:
+Ohne Notarisierung ggf. *Systemeinstellungen → Datenschutz & Sicherheit → Trotzdem öffnen*.
 
-```bash
-# Standard-Xcode:
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-# oder Xcode-beta:
-sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
-```
+#### Alternative: aus Xcode (Entwicklung)
 
-Danach in Xcode:
+Voraussetzung: **Xcode** (nicht nur Command Line Tools).
 
 1. `safari-extension/MoneyMoney Helper/MoneyMoney Helper.xcodeproj` öffnen
-2. Signing → Team auswählen (Apple-ID reicht für lokale Entwicklung)
-3. Ziel/Destination: **My Mac**
-4. **Product → Run** (⌘R)
-5. Safari → **Einstellungen → Erweiterungen** → MoneyMoney Helper aktivieren
+2. Signing → Team; Destination **My Mac**
+3. **Product → Run** (⌘R)
+4. Safari → Erweiterungen → MoneyMoney Helper aktivieren
 
-Fehler *„Please select an available device…“* → Destination auf **My Mac**
-stellen (nicht iPhone/Simulator).
-
-Unter **macOS 26 und neuer:** Erweiterung aktivieren. **„Websites bearbeiten“**
-nicht öffnen (Safari-Bug). Website-Zugriff bei Bedarf über die Safari-Toolbar
-auf der Bank-Seite erlauben.
+Unter **macOS 26 und neuer:** **„Websites bearbeiten“** nicht öffnen (Safari-Bug);
+Zugriff über die Safari-Toolbar auf der Bank-Seite.
 
 ## Nutzung
 
