@@ -52,18 +52,29 @@ assert.equal(
   null,
 );
 
-assert.ok(buildHint(fidelity, ['ATC'], 'www.fidelity.com').includes('digital.fidelity.com'));
+assert.equal(
+  buildHint(fidelity, ['ATC'], 'www.fidelity.com'),
+  'Bitte digital.fidelity.com öffnen (eingeloggt, Kontoseite).',
+);
 assert.equal(buildHint(fidelity, [], 'digital.fidelity.com'), '');
 
 const mockApi = {
   cookies: {
     getAll: async (details) => {
-      if ('url' in details && details.url && new URL(details.url).hostname === 'digital.fidelity.com') {
+      if (
+        'url' in details
+        && details.url
+        && new URL(details.url).hostname === 'digital.fidelity.com'
+      ) {
         return [{ name: 'ATC', value: '1', domain: 'digital.fidelity.com', path: '/' }];
       }
       if (
         ('domain' in details && details.domain === 'login.fidelity.com')
-        || ('url' in details && details.url && new URL(details.url).hostname === 'login.fidelity.com')
+        || (
+          'url' in details
+          && details.url
+          && new URL(details.url).hostname === 'login.fidelity.com'
+        )
       ) {
         return [{ name: '_abck', value: '2', domain: 'login.fidelity.com', path: '/' }];
       }
