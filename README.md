@@ -27,13 +27,13 @@ aus (*MoneyMoney → Einstellungen → Erweiterungen*).
 | Erweiterung | Repository | Version | Kurz |
 |-------------|------------|---------|------|
 | [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.09** (Website **2.04**) | Bestellungen; Cookie-Import / WAF-Halt |
-| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import |
+| [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.93 Beta** | Cookie-Import |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import |
 | [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Prepaid-Karten, E-Mail/Passwort und E-Mail-Code |
 | [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.01** | Benefits, E-Mail, Captcha und E-Mail-Code |
 | [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **1.0** | Kundenportal; Anmeldung mit SecureGo-Freigabe |
-| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Login und MFA; Cookie optional |
-| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.04** | Login, Geburtsdatum und MFA; Cookie optional |
+| [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.10** | Login und MFA; Cookie optional |
+| [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.05** | Login, Geburtsdatum und MFA; Cookie optional |
 
 **Mehrere Logins:** Dieselbe Erweiterung mehrfach mit unterschiedlichen
 Zugangsdaten anlegen — jeder Bankzugang hat seine eigene Sitzung.
