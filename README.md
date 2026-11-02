@@ -12,7 +12,7 @@ Dieses Hub enthält den MoneyMoney Helper und Cookie-Export-Skripte.
 Aktuelle **MoneyMoney Signaturen** liegen unter [`Signed/`](Signed/) und sind
 mit den Website-Downloads abgeglichen (Amazon **2.04**, Bank of America **0.92**,
 Givve **1.00**, Pluxee **1.01**, Presidential **1.09**, Shareview **1.04**).
-Amazon Eigenrepo ist **2.07** (Website **2.04** signiert; Cookie-Import + WAF-Halt).
+Amazon Eigenrepo ist **2.09** (Website **2.04** signiert; Cookie-Import + WAF-Halt).
 Fidelity und MLP Versicherungen folgen mit dem nächsten MoneyMoney-Update
 (Whitelist) — siehe [`Signed/README.md`](Signed/README.md).
 
@@ -26,12 +26,12 @@ aus (*MoneyMoney → Einstellungen → Erweiterungen*).
 
 | Erweiterung | Repository | Version | Kurz |
 |-------------|------------|---------|------|
-| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.07** (Website **2.04**) | Bestellungen; Cookie-Import / WAF-Halt |
+| [Amazon](https://github.com/rosch100/Amazon-MoneyMoney) | [Amazon-MoneyMoney](https://github.com/rosch100/Amazon-MoneyMoney) | **2.09** (Website **2.04**) | Bestellungen; Cookie-Import / WAF-Halt |
 | [Bank of America](https://github.com/rosch100/Bank-of-America-MoneyMoney) | [Bank-of-America-MoneyMoney](https://github.com/rosch100/Bank-of-America-MoneyMoney) | **0.92 Beta** | Cookie-Import |
 | [Fidelity](https://github.com/rosch100/Fidelity-MoneyMoney) | [Fidelity-MoneyMoney](https://github.com/rosch100/Fidelity-MoneyMoney) | **0.93 Beta** | Cookie-Import |
 | [Givve Prepaid](https://github.com/rosch100/Givve-MoneyMoney) | [Givve-MoneyMoney](https://github.com/rosch100/Givve-MoneyMoney) | **1.00** | Prepaid-Karten, E-Mail/Passwort und E-Mail-Code |
 | [Pluxee Benefits](https://github.com/rosch100/Pluxee-MoneyMoney) | [Pluxee-MoneyMoney](https://github.com/rosch100/Pluxee-MoneyMoney) | **1.01** | Benefits, E-Mail, Captcha und E-Mail-Code |
-| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **0.92 Beta** | Kundenportal; Cookie oder Login |
+| [MLP Versicherungen](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | [MLP-Versicherungen-MoneyMoney](https://github.com/rosch100/MLP-Versicherungen-MoneyMoney) | **1.0** | Kundenportal; Anmeldung mit SecureGo-Freigabe |
 | [Presidential Bank](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | [Presidential-Bank-MoneyMoney](https://github.com/rosch100/Presidential-Bank-MoneyMoney) | **1.09** | Login und MFA; Cookie optional |
 | [Shareview](https://github.com/rosch100/Shareview-MoneyMoney) | [Shareview-MoneyMoney](https://github.com/rosch100/Shareview-MoneyMoney) | **1.04** | Login, Geburtsdatum und MFA; Cookie optional |
 
@@ -72,9 +72,9 @@ COOKIE:name=value;name2=value2
    (bzw. in Chrome/Firefox die entpackte Erweiterung laden)
 3. Bank-Seite öffnen; Cookies kopieren; in MoneyMoney einfügen
 
-Der Helper unterstützt derzeit **Bank of America**, **Fidelity**,
-**MLP Versicherungen** und **Amazon.de**. Presidential Bank und Shareview:
-Cookies manuell oder per HAR (siehe unten).
+Der Helper exportiert derzeit Cookies für **Bank of America**, **Fidelity** und
+**Amazon.de**. Presidential Bank und Shareview: Cookies manuell oder per HAR
+(siehe unten).
 
 ### 2. Export per HAR (Alternative)
 
@@ -82,7 +82,6 @@ Cookies manuell oder per HAR (siehe unten).
 |------|--------|------------------|
 | Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN`, `LSESSIONID` |
 | Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | `_abck`, `bm_sz`, `ATC`, `ET`, … |
-| MLP Versicherungen | `python3 scripts/extract-mlp-cookies.py export.har` | `VUSESSIONID` von `vue.mlp.de` |
 | Presidential Bank | `python3 scripts/extract-presidential-cookies.py export.har` | `SESSION_TOKEN`, `rftoken` |
 | Shareview | `python3 scripts/extract-shareview-cookies.py export.har` | `FedAuth` |
 | Amazon.de | Helper (empfohlen) oder DevTools → Cookies | `session-id`, `at-acbde` / `at-main` |

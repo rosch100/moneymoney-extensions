@@ -25,23 +25,10 @@ const banksRaw = JSON.parse(
 const banks = parseBankConfig(banksRaw);
 
 const fidelity = banks.fidelity;
-const mlp = banks.mlp;
 
 assert.equal(detectBank('digital.fidelity.com', banks)?.id, 'fidelity');
 assert.equal(detectBank('untrusted.fidelity.com', banks), null);
 assert.equal(detectBank('unknown.example', banks), null);
-
-const formatted = formatCookieExport(
-  [
-    { name: 'VUSESSIONID', value: 'a' },
-    { name: 'VUSESSIONID', value: 'b' },
-    { name: 'BIGipServervue.mlp.de', value: 'pool' },
-  ],
-  mlp,
-);
-assert.ok(formatted.startsWith('COOKIE:'));
-assert.ok(formatted.includes('VUSESSIONID=a;VUSESSIONID=b'));
-assert.ok(!formatted.includes(','));
 
 assert.deepEqual(missingCritical([{ name: 'ATC', value: '1' }], fidelity), ['_abck']);
 assert.equal(exportBlockReason([{ name: 'ATC', value: '1' }], ['_abck'], []), 'missing');

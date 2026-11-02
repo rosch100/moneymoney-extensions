@@ -119,9 +119,6 @@ export function buildHint(bank, missing, tabHost) {
   if (bank.sessionHost && tabHost !== bank.sessionHost) {
     return `Bitte ${bank.sessionHost} öffnen (eingeloggt, Kontoseite).`;
   }
-  if (bank.id === 'mlp') {
-    return 'Vertragsübersicht auf vue.mlp.de öffnen, dann erneut exportieren.';
-  }
   if (bank.id === 'fidelity') {
     return 'Portfolio Summary öffnen, „Don\'t ask again on this device“ bei MFA.';
   }

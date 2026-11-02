@@ -20,7 +20,6 @@ import extension_ssot as ssot  # noqa: E402
 MATCH_SAMPLES = {
     "fidelity": "digital.fidelity.com",
     "boa": "secure.bankofamerica.com",
-    "mlp": "vue.mlp.de",
     "amazon": "www.amazon.de",
 }
 

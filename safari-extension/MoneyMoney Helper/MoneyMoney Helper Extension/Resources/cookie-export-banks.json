@@ -34,22 +34,6 @@
       "bm_sv", "bm_sz", "bmuid", "ak_bmsc"
     ]
   },
-  "mlp": {
-    "label": "MLP Versicherungen",
-    "match_host": "(?:^|\\.)mlp\\.de$",
-    "origins": [
-      "https://vue.mlp.de",
-      "https://kundenportal.mlp.de",
-      "https://financepilot-pe.mlp.de"
-    ],
-    "session_host": "vue.mlp.de",
-    "critical": ["VUSESSIONID"],
-    "allow_duplicate_names": ["VUSESSIONID"],
-    "priority": [
-      "VUSESSIONID",
-      "BIGipServervue.mlp.de"
-    ]
-  },
   "amazon": {
     "label": "Amazon Bestellungen",
     "match_host": "(?:^|\\.)amazon\\.de$",

@@ -44,7 +44,7 @@ Zugriff über die Safari-Toolbar auf der Bank-Seite.
 
 ## Nutzung
 
-Unterstützt: **Bank of America**, **Fidelity**, **MLP Versicherungen**, **Amazon.de**.
+Unterstützt: **Bank of America**, **Fidelity**, **Amazon.de**.
 Presidential Bank und Shareview: Cookies manuell oder über den Hub (HAR).
 
 1. Im Browser einloggen (inkl. MFA)
