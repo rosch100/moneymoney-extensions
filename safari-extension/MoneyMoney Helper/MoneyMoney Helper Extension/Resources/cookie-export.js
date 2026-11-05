@@ -27,7 +27,13 @@ export function detectBank(hostname, banks) {
   const host = hostname.replace(/^www\./, '');
   for (const bank of Object.values(banks)) {
     const originHosts = bank.origins.map((origin) => new URL(origin).hostname);
-    if (originHosts.includes(hostname) && bank.matchHost.test(host)) {
+    const isConfiguredParent = originHosts.some(
+      (originHost) => originHost.endsWith(`.${host}`),
+    );
+    if (
+      (originHosts.includes(hostname) || isConfiguredParent)
+      && bank.matchHost.test(host)
+    ) {
       return bank;
     }
   }
@@ -137,13 +143,15 @@ export function buildHint(bank, missing, tabHost) {
 /**
  * @param {import('./config.js').browserApi} api
  * @param {BankConfig} bank
+ * @param {string} [activeUrl]
  * @returns {Promise<CookieCollectResult>}
  */
-export async function collectCookies(api, bank) {
+export async function collectCookies(api, bank, activeUrl) {
   /** @type {Map<string, CookieEntry>} */
   const merged = new Map();
   /** @type {string[]} */
   const failedOrigins = [];
+  const failedOriginSet = new Set();
 
   /**
    * @param {chrome.cookies.Cookie} item
@@ -172,28 +180,53 @@ export async function collectCookies(api, bank) {
   /**
    * @param {string} origin
    */
+  async function addQuery(details, failureLabel) {
+    let queryFailed = false;
+
+    try {
+      const list = await api.cookies.getAll(details);
+      mergeList(list);
+    } catch {
+      queryFailed = true;
+    }
+
+    if (queryFailed && !failedOriginSet.has(failureLabel)) {
+      failedOriginSet.add(failureLabel);
+      failedOrigins.push(failureLabel);
+    }
+  }
+
   async function addFromOrigin(origin) {
     const url = `${origin}/`;
     const hostname = new URL(origin).hostname;
-    let queryFailed = false;
-
     for (const details of [{ url }, { domain: hostname }]) {
-      try {
-        const list = await api.cookies.getAll(details);
-        mergeList(list);
-      } catch {
-        queryFailed = true;
-      }
-    }
-
-    if (queryFailed) {
-      failedOrigins.push(origin);
+      await addQuery(details, origin);
     }
   }
 
   // host_permissions == origins (keine *.domain-Wildcards wegen Safari 27)
   for (const origin of bank.origins) {
     await addFromOrigin(origin);
+  }
+
+  let active;
+  if (activeUrl) {
+    try {
+      active = new URL(activeUrl);
+    } catch {
+      failedOrigins.push(activeUrl);
+    }
+  }
+
+  if (active) {
+    await addQuery({ url: activeUrl }, active.origin);
+
+    const labels = active.hostname.split('.');
+    while (labels.length > 2) {
+      labels.shift();
+      const domain = labels.join('.');
+      await addQuery({ domain }, `https://${domain}`);
+    }
   }
 
   return {

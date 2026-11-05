@@ -50,7 +50,7 @@ async function refresh(banks) {
   }
 
   titleEl.textContent = bank.label;
-  const { cookies, failedOrigins } = await collectCookies(browserApi, bank);
+  const { cookies, failedOrigins } = await collectCookies(browserApi, bank, tab.url);
   currentExport = formatCookieExport(cookies, bank);
 
   const missing = missingCritical(cookies, bank);

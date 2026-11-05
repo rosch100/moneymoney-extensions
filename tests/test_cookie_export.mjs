@@ -13,6 +13,11 @@ import {
   formatCookieExport,
   missingCritical,
 } from '../browser-extension/cookie-export.js';
+import {
+  collectCookies as collectSafariCookies,
+  detectBank as detectSafariBank,
+} from '../safari-extension/MoneyMoney Helper/MoneyMoney Helper Extension/Resources/cookie-export.js';
+import { parseBankConfig as parseSafariBankConfig } from '../safari-extension/MoneyMoney Helper/MoneyMoney Helper Extension/Resources/config.js';
 import { parseBankConfig } from '../browser-extension/config.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,8 +28,33 @@ const banksRaw = JSON.parse(
   readFileSync(join(root, 'browser-extension/cookie-export-banks.json'), 'utf8'),
 );
 const banks = parseBankConfig(banksRaw);
+const safariBanksRaw = JSON.parse(
+  readFileSync(
+    join(
+      root,
+      'safari-extension/MoneyMoney Helper/MoneyMoney Helper Extension/Resources/cookie-export-banks.json',
+    ),
+    'utf8',
+  ),
+);
+const safariBanks = parseSafariBankConfig(safariBanksRaw);
 
 const fidelity = banks.fidelity;
+const safariBoa = safariBanks.boa;
+
+assert.ok(
+  safariBoa.critical.includes('LSESSIONID'),
+  'safariBoa.requiredCookies.includeLSESSIONID',
+);
+assert.ok(
+  safariBoa.critical.includes('om_token'),
+  'safariBoa.requiredCookies.includeOmToken',
+);
+assert.equal(
+  detectSafariBank('bankofamerica.com', safariBanks),
+  safariBanks.boa,
+  'detectBank.acceptsConfiguredParentDomain',
+);
 
 assert.equal(detectBank('digital.fidelity.com', banks)?.id, 'fidelity');
 assert.equal(detectBank('untrusted.fidelity.com', banks), null);
@@ -169,6 +199,25 @@ assert.equal(
     partialUrlFailResult.failedOrigins,
   ),
   'partial',
+);
+
+const safariCookieQueries = [];
+const safariApi = {
+  cookies: {
+    getAll: async (details) => {
+      safariCookieQueries.push(details);
+      return [];
+    },
+  },
+};
+await collectSafariCookies(
+  safariApi,
+  safariBoa,
+  'https://secure.bankofamerica.com/myaccounts/details/card/account-details.go',
+);
+assert.ok(
+  safariCookieQueries.some((query) => query.domain === 'bankofamerica.com'),
+  'safariCookies.queriesParentDomain',
 );
 
 console.log('ALL COOKIE EXPORT JS TESTS PASSED');

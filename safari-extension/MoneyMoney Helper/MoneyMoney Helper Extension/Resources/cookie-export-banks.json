@@ -27,7 +27,15 @@
       "https://www.bankofamerica.com"
     ],
     "session_host": "secure.bankofamerica.com",
-    "critical": ["SMSESSION", "SSOTOKEN"],
+    "critical": [
+      "SMSESSION", "SSOTOKEN", "LSESSIONID", "GSID", "CSID", "MMID", "ctd", "bmuid",
+      "appSession", "AO-Processed", "BA_0021", "BOA_0020", "BOFA_LOCALE_COOKIE",
+      "CONTEXT", "INTL_LANG", "LANG_COOKIE", "PFSiteInd", "returnSiteIndicator",
+      "PM_AFFINITY_CSBPS", "PROFILEMAP", "HTS", "PSTS", "SID", "SPID", "UKEY",
+      "WPID", "state", "JS_AAD", "JS_ACM", "JS_AHLOGIN", "JS_AIPD", "JS_DEC",
+      "JS_DPSPRFSETT", "JS_OGW", "JS_PIPAD", "JS_TFR", "om_token", "TS0126dbc2",
+      "TS0156185e", "TS017f5af8", "TS01a5753c", "bm_sv", "bm_sz", "ak_bmsc", "_abck"
+    ],
     "allow_duplicate_names": [],
     "priority": [
       "SMSESSION", "SSOTOKEN", "LSESSIONID", "GSID", "CSID", "MMID", "cdSNum", "ctd",
