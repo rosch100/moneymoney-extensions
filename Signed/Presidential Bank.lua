@@ -7,7 +7,7 @@
 --
 
 WebBanking{
-  version     = 1.09,
+  version     = 1.10,
   url         = "https://www.presidentialpcbanking.com",
   services    = {"Presidential Bank"},
   description = "Presidential Bank - MFA and Cookie Import"
@@ -20,6 +20,8 @@ local CONSTANTS = {
   bankCode = "255073345",
   allowedHost = "www.presidentialpcbanking.com",
 }
+
+local EMPTY_MULTIPART_BOUNDARY = "----geckoformboundary7b1f0c2d9e4a4f6b8c3d2e1f0a9b8c7d"
 
 local CREDENTIAL_REJECTION_MARKERS = {
   "incorrect password",
@@ -90,9 +92,6 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   if session.waitingForMfaCode then
     return verifyMfaCode(credentials[1])
   end
-  if session.waitingForCookieImport then
-    return handleCookieImportStep(credentials)
-  end
 
   return "Anmeldesitzung abgelaufen. Bitte erneut anmelden."
 end
@@ -110,7 +109,20 @@ local function isCredentialRejectionMessage(message)
   return false
 end
 
+-- Der Server meldet abgelehnte Zugangsdaten als targetView "consumer_login"
+-- mit targetData.initialState.invalidLogin = true (ohne errorMessage).
+local function isInvalidLoginView(loginData)
+  local targetData = loginData.targetData
+  return loginData.targetView == "consumer_login"
+    and type(targetData) == "table"
+    and type(targetData.initialState) == "table"
+    and targetData.initialState.invalidLogin == true
+end
+
 local function classifyExternalLoginError(loginData)
+  if isInvalidLoginView(loginData) then
+    return LoginFailed
+  end
   if loginData.targetView ~= "error" and not loginData.errorMessage then
     return nil
   end
@@ -139,7 +151,7 @@ function loginRedirectRequiresMfa(redirectData, redirectResponse)
   end
 
   -- Log 2026-09-04: {"targetData":"nxg-olb/mfa","targetView":"redirect"} → MFA nötig.
-  -- Bare targetView "redirect" is NOT success; isMfaSuccess() would mis-classify it.
+  -- Bare targetView "redirect" is NOT success on its own (siehe Verzweigung in handleLoginStep1).
   local targetData = redirectData.targetData
   if type(targetData) == "string" then
     local dataLower = targetData:lower()
@@ -310,7 +322,6 @@ function diagnosePersistedPrivateDevice(storage, accountKey)
       and next(storage.presidentialPrivateDeviceCookies) ~= nil
   local header = storage.presidentialPrivateDeviceCookieHeader
   local headerLen = type(header) == "string" and #header or 0
-  local dedicatedKey = tostring(storage.presidentialPrivateDeviceAccountKey or "")
   local mapEntry = storage.connectionsByAccount
       and storage.connectionsByAccount[accountKey]
   local mapCookies = mapEntry and type(mapEntry.sessionCookies) == "table"
@@ -322,10 +333,6 @@ function diagnosePersistedPrivateDevice(storage, accountKey)
     .. tostring(mapCookies == true)
     .. " privateCount="
     .. tostring(countTableKeys(private))
-    .. " keys="
-    .. dedicatedKey
-    .. "/"
-    .. tostring(accountKey)
 end
 
 function persistPrivateDeviceCookieSlot(storage, accountKey, privateCookies)
@@ -345,6 +352,21 @@ function clearInMemorySessionCookies()
   session.csrfToken = nil
   session.deviceRegisteredPrivate = nil
   session.loginComplete = nil
+end
+
+function postLoginRedirect(mfaLso)
+  return connection:request(
+    "POST",
+    buildLoginRedirectUrl(mfaLso),
+    "{}",
+    "application/json",
+    withCookieHeader({
+      ["Accept"] = "application/json",
+      ["Content-Type"] = "application/json",
+      ["Origin"] = CONSTANTS.baseUrl,
+      ["Referer"] = CONSTANTS.baseUrl .. "/dbank/live/app/external-login"
+    })
+  )
 end
 
 function handleLoginStep1(credentials)
@@ -418,19 +440,22 @@ function handleLoginStep1(credentials)
     return loginError
   end
 
-  -- POST to login/redirect — mfaLSO trägt den Private-Device-Token (Browser: MFA Last Sign-On).
-  local redirectResponse = connection:request(
-    "POST",
-    buildLoginRedirectUrl(mfaLso),
-    "{}",
-    "application/json",
-    withCookieHeader({
-      ["Accept"] = "application/json",
-      ["Content-Type"] = "application/json",
-      ["Origin"] = CONSTANTS.baseUrl,
-      ["Referer"] = CONSTANTS.baseUrl .. "/dbank/live/app/external-login"
-    })
-  )
+  -- Verzweigung nach external-login, wie im Browser (HAR-Vergleich):
+  -- "redirect" -> Anmeldung ohne MFA, "restore_mfa_redirect" -> login/redirect ohne mfaLSO,
+  -- "redirect_service" -> MFA-Seite.
+  local externalView = extLoginData.targetView
+  if externalView == "redirect" then
+    MM.printStatus("Presidential Bank: Anmeldung ohne MFA (Gerät erkannt).")
+    return finalizeLogin(externalResponse)
+  end
+  if externalView == "redirect_service" then
+    return getMfaConfig()
+  end
+  if externalView ~= "restore_mfa_redirect" then
+    return "Unerwartete Antwort vom Anmeldeserver (targetView=" .. tostring(externalView) .. ")."
+  end
+
+  local redirectResponse = postLoginRedirect("")
 
   if not redirectResponse then
     return "Keine Antwort beim Aufbau der Anmeldesitzung."
@@ -447,118 +472,122 @@ function handleLoginStep1(credentials)
     return redirectError
   end
 
-  -- Private-Device-Cookie ersetzt OTP: Redirect kann bereits eingeloggt sein.
   if not loginRedirectRequiresMfa(redirectData, redirectResponse) then
-    MM.printStatus("Presidential Bank: MFA übersprungen (Private Device / Redirect).")
+    MM.printStatus("Presidential Bank: MFA übersprungen (Redirect).")
     return finalizeLogin(redirectResponse)
   end
 
   return getMfaConfig()
 end
 
-function getMfaConfig()
-  local mfaConfigResponse = connection:request("GET", CONSTANTS.authApi .. "/mfa/config", nil, nil, withCookieHeader({
-    ["Accept"] = "application/json",
-    ["Referer"] = CONSTANTS.baseUrl .. "/dbank/live/app/mfa"
-  }))
+-- Ohne Seed liefert math.random in Lua 5.1 nach jedem Start dieselbe Folge.
+math.randomseed(os.time())
 
-  if not mfaConfigResponse then
+function generateUuid()
+  local template = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx"
+  return (template:gsub("[xy]", function(c)
+    local v = (c == "x") and math.random(0, 15) or math.random(8, 11)
+    return string.format("%x", v)
+  end))
+end
+
+-- Leerer Multipart-Body mit passender Boundary, wie der Browser ihn sendet (HAR: Status 200).
+-- Gibt Body und Content-Type zurück.
+function buildEmptyMultipartRequest()
+  return "--" .. EMPTY_MULTIPART_BOUNDARY .. "--\r\n",
+    "multipart/form-data; boundary=" .. EMPTY_MULTIPART_BOUNDARY
+end
+
+function buildMfaBffUrl(path)
+  return CONSTANTS.baseUrl .. "/nxg-olb-bff/live/nxg-ui/v1/authentication/" .. path
+end
+
+function buildMfaBffHeaders(hasJsonBody)
+  local headers = {
+    ["Accept"] = "application/json, text/plain, */*",
+    ["Referer"] = CONSTANTS.baseUrl .. "/nxg-olb/live/mfaVerification",
+    ["channel"] = "web",
+    ["correlationId"] = generateUuid(),
+    ["interactionId"] = generateUuid()
+  }
+  if hasJsonBody then
+    headers["Content-Type"] = "application/json"
+    headers["Origin"] = CONSTANTS.baseUrl
+  end
+  return withCookieHeader(headers)
+end
+
+function getMfaConfig()
+  local mfaResponse = connection:request("GET", buildMfaBffUrl("mfa"), nil, nil, buildMfaBffHeaders(false))
+
+  if not mfaResponse then
     return "Keine Antwort beim Laden der MFA-Konfiguration."
   end
 
   syncSessionCookies()
 
-  local mfaData = parseJson(mfaConfigResponse)
-
+  local mfaData = parseJson(mfaResponse)
   if not mfaData then
     return "Ungültige Antwort beim Laden der MFA-Konfiguration."
   end
 
-  session.mfaConfig = mfaData
-  session.csrfToken = extractCsrfToken(mfaData)
-  if session.csrfToken then
-    mergeSessionCookie("CSRFToken", session.csrfToken)
+  local methods, methodsError = extractMfaMethods(mfaData)
+  if not methods then
+    return methodsError
   end
-  session.mfaMethods = extractMfaMethods(mfaData)
+  session.mfaMethods = methods
 
   if #session.mfaMethods == 0 then
-    if session.deviceRegisteredPrivate or hasPrivateDeviceCookie() then
-      local finalized = finalizeLogin(mfaConfigResponse)
-      if finalized == nil then
-        MM.printStatus("Presidential Bank: MFA-Config ohne Methoden — Private Device Login.")
-        return nil
-      end
+    if hasPrivateDeviceCookie() then
+      MM.printStatus("Presidential Bank: MFA-Config ohne Methoden — Private Device Login.")
+      return finalizeLogin(mfaResponse)
     end
-    session.waitingForMfaCode = true
-    return mfaCodeChallenge(nil)
+    return "Keine MFA-Methode bei Presidential Bank hinterlegt."
   end
 
   session.waitingForMethodSelection = true
   return buildMfaSelectionChallenge()
 end
 
-function extractCsrfToken(mfaData)
-  if mfaData.pageProps and mfaData.pageProps.CSRFToken then
-    return mfaData.pageProps.CSRFToken
-  elseif mfaData.targetData and mfaData.targetData.CSRFToken then
-    return mfaData.targetData.CSRFToken
-  elseif mfaData.globalEnvProps and mfaData.globalEnvProps.globalIFS then
-    return mfaData.globalEnvProps.globalIFS.guid
-  end
-  return nil
-end
-
+-- Methoden aus der Antwort von nxg-ui/v1/authentication/mfa.
+-- Die Antwort listet nur bereits validierte Methoden (TOTP, Telefonnummern, E-Mail).
+-- Gibt bei fehlenden Pflichtfeldern nil und eine Fehlermeldung zurück.
 function extractMfaMethods(mfaData)
   local methods = {}
 
-  if not (mfaData.targetData and mfaData.targetData.destinations) then
-    return methods
+  if type(mfaData.validatedTotpToken) == "table" and mfaData.validatedTotpToken.id then
+    table.insert(methods, buildMfaMethod("TOTP", mfaData.validatedTotpToken.id, "Authenticator App (TOTP)", "totp"))
   end
 
-  local destinations = mfaData.targetData.destinations
-  if type(destinations) == "string" then
-    destinations = parseJson(destinations) or {}
-  end
-
-  if type(destinations) ~= "table" then
-    return methods
-  end
-
-  for _, dest in ipairs(destinations) do
-    if dest.activated then
-      local method = buildMfaMethod(dest)
-      if method then
-        table.insert(methods, method)
+  if type(mfaData.validatedPhoneNumbers) == "table" then
+    for _, phone in ipairs(mfaData.validatedPhoneNumbers) do
+      if type(phone) ~= "table" then
+        return nil, "Ungültiger Telefoneintrag in der MFA-Konfiguration."
+      end
+      if (phone.SMS_id or phone.voice_id) and phone.number == nil then
+        return nil, "Telefonnummer fehlt in der MFA-Konfiguration."
+      end
+      if phone.SMS_id then
+        table.insert(methods, buildMfaMethod("SMS", phone.SMS_id, "Text me at " .. phone.number, "sms"))
+      end
+      if phone.voice_id then
+        table.insert(methods, buildMfaMethod("VOICE", phone.voice_id, "Call me at " .. phone.number, "voice"))
       end
     end
+  end
+
+  if type(mfaData.validatedEmail) == "table" and mfaData.validatedEmail.id then
+    if mfaData.validatedEmail.address == nil then
+      return nil, "E-Mail-Adresse fehlt in der MFA-Konfiguration."
+    end
+    table.insert(methods, buildMfaMethod("EMAIL", mfaData.validatedEmail.id, "Email me at " .. mfaData.validatedEmail.address, "email"))
   end
 
   return methods
 end
 
-function buildMfaMethod(dest)
-  local method = {
-    id = dest.id and dest.id.value,
-    protocol = dest.protocol,
-    contactInfo = dest.contactInfo or "",
-    telephoneCountryCode = dest.telephoneCountryCode
-  }
-
-  local protocolMap = {
-    TOTP = { name = "Authenticator App (TOTP)", type = "totp" },
-    SMS = { name = "Text me at " .. method.contactInfo, type = "sms" },
-    VOICE = { name = "Call me at " .. method.contactInfo, type = "voice" },
-    EMAIL = { name = "Email me at " .. method.contactInfo, type = "email" }
-  }
-
-  local mapped = protocolMap[dest.protocol]
-  if not mapped then
-    return nil
-  end
-
-  method.name = mapped.name
-  method.type = mapped.type
-  return method
+function buildMfaMethod(protocol, id, name, methodType)
+  return { protocol = protocol, id = id, name = name, type = methodType }
 end
 
 function buildMfaSelectionChallenge(prefix)
@@ -596,38 +625,25 @@ function handleMethodSelection(userInput)
   end
 
   local methodIndex = tonumber(userInput)
-  if not methodIndex or methodIndex < 1 or methodIndex > #session.mfaMethods then
+  if not methodIndex or methodIndex ~= math.floor(methodIndex)
+      or methodIndex < 1 or methodIndex > #session.mfaMethods then
     -- Selection-State erhalten, User soll erneut waehlen.
     return buildMfaSelectionChallenge(
       "Invalid selection. Please enter a number between 1 and " .. #session.mfaMethods .. "."
     )
   end
 
-  session.selectedMfaMethod = session.mfaMethods[methodIndex]
-  session.waitingForMethodSelection = false
-  session.waitingForMfaCode = true
-
-  -- TOTP: direkt mfa/submit ohne mfa/select (Browser-Flow).
-  if session.selectedMfaMethod.type ~= "totp" then
-    local buttonError = pressMfaVirtualButton(session.selectedMfaMethod)
-    if buttonError then
-      session.waitingForMethodSelection = true
-      session.waitingForMfaCode = false
-      session.selectedMfaMethod = nil
-      return buildMfaSelectionChallenge(buttonError)
-    end
+  local method = session.mfaMethods[methodIndex]
+  local requestError = requestMfaVerification(method)
+  if requestError then
+    -- Auswahl bleibt offen, damit eine andere Methode gewaehlt werden kann.
+    return buildMfaSelectionChallenge(requestError)
   end
 
-  return mfaCodeChallenge(session.selectedMfaMethod)
-end
-
-function buildMfaSelectUrl(method)
-  return CONSTANTS.authApi .. "/mfa/select?type=" .. method.type
-end
-
-function buildMfaSubmitUrl(method, cookieoptin)
-  local optin = cookieoptin == false and "false" or "true"
-  return CONSTANTS.authApi .. "/mfa/submit?displayMethod=" .. method.protocol .. "&type=OTP&cookieoptin=" .. optin
+  session.selectedMfaMethod = method
+  session.waitingForMethodSelection = false
+  session.waitingForMfaCode = true
+  return mfaCodeChallenge(method)
 end
 
 function jsonEscapeString(value)
@@ -639,60 +655,27 @@ function jsonEscapeString(value)
     :gsub('"', '\\"')
 end
 
-function buildMfaSelectBody(method)
-  session.csrfToken = session.csrfToken or extractCsrfTokenFromCookies(session.cookies) or ""
-  return '{"destId":"' .. jsonEscapeString(method.id) ..
-    '","csrftoken":"' .. jsonEscapeString(session.csrfToken) .. '"}'
-end
-
-function buildMfaSubmitBody(method, code)
-  session.csrfToken = session.csrfToken or extractCsrfTokenFromCookies(session.cookies) or ""
-  local destId = method and method.id
-  if method and method.type == "totp" and not destId then
-    destId = findTotpId() or ""
-  end
-  return '{"destId":"' .. jsonEscapeString(destId or "") ..
-    '","csrftoken":"' .. jsonEscapeString(session.csrfToken) ..
-    '","otp":"' .. jsonEscapeString(code) .. '"}'
-end
-
-function isMfaSelectSuccess(response)
-  if not response or response == "" then
-    return false
-  end
-  local data = parseJson(response)
-  if not data or data.errorCode then
-    return false
-  end
-  return data.result == "success"
-end
-
-function pressMfaVirtualButton(method)
-  session.csrfToken = session.csrfToken or extractCsrfTokenFromCookies(session.cookies) or ""
-
-  local selectUrl = buildMfaSelectUrl(method)
-  local body = buildMfaSelectBody(method)
+-- Fordert den Code fuer eine Methode an (Browser-Schritt "authentication/mfa").
+-- Gibt nil bei Erfolg zurueck, sonst eine Fehlermeldung.
+function requestMfaVerification(method)
+  local body = '{"protocol":"' .. jsonEscapeString(method.protocol) ..
+    '","id":"' .. jsonEscapeString(method.id) .. '"}'
 
   local response, _, _, _, respHeaders = connection:request(
-    "POST",
-    selectUrl,
-    body,
-    "application/json",
-    buildApiHeaders()
+    "POST", buildMfaBffUrl("mfa"), body, "application/json", buildMfaBffHeaders(true)
   )
 
   applyResponseCookies(respHeaders)
   syncSessionCookies()
 
-  if not isMfaSelectSuccess(response) then
-    local data = parseJson(response)
-    if data and data.errorCode then
-      return "MFA-Button fehlgeschlagen (Fehler " .. tostring(data.errorCode) ..
-             "). Bitte andere Methode waehlen oder Login neu starten."
-    end
-    return "MFA-Button fehlgeschlagen. Bitte andere Methode waehlen oder Login neu starten."
+  local data = parseJson(response)
+  if not data or not data.status then
+    return "MFA-Anforderung fehlgeschlagen. Bitte andere Methode waehlen oder Login neu starten."
   end
-
+  if data.status ~= "VERIFICATION_REQUIRED" then
+    return "MFA-Anforderung fehlgeschlagen (Status " .. tostring(data.status) ..
+           "). Bitte andere Methode waehlen oder Login neu starten."
+  end
   return nil
 end
 
@@ -703,6 +686,10 @@ function verifyMfaCode(code)
   end
 
   local method = session.selectedMfaMethod
+  if not method then
+    session.waitingForMfaCode = false
+    return "MFA verification failed: No active session"
+  end
 
   -- Format-Vorpruefung: leere/nicht-numerische Eingabe -> Retry-Challenge.
   if not code or not code:match("^%s*%d+%s*$") then
@@ -710,12 +697,12 @@ function verifyMfaCode(code)
   end
   code = code:gsub("^%s*(.-)%s*$", "%1")
 
-  session.csrfToken = session.csrfToken or extractCsrfTokenFromCookies(session.cookies) or ""
-
-  local submitUrl = buildMfaSubmitUrl(method or { protocol = "TOTP", type = "totp" })
-  local body = buildMfaSubmitBody(method, code)
+  -- privateDevice=true entspricht dem Browser-Haken "Gerät merken".
+  local body = '{"oneTimePasscode":"' .. jsonEscapeString(code) ..
+    '","privateDevice":true,"protocol":"' .. jsonEscapeString(method.protocol) ..
+    '","id":"' .. jsonEscapeString(method.id) .. '"}'
   local mfaResponse, _, _, _, mfaHeaders = connection:request(
-    "POST", submitUrl, body, "application/json", buildApiHeaders()
+    "POST", buildMfaBffUrl("verify"), body, "application/json", buildMfaBffHeaders(true)
   )
 
   if not mfaResponse then
@@ -730,31 +717,17 @@ function verifyMfaCode(code)
   end
   syncSessionCookies()
   markPrivateDeviceFromCookies()
-  -- MFA-Response kann Private-Device-Cookies auch im JSON liefern.
-  local mfaData = parseJson(mfaResponse)
-  if mfaData then
-    updateDevicePrivateFromAuthtoken(mfaResponse)
+
+  local data = parseJson(mfaResponse)
+  if not data or not data.status then
+    session.waitingForMfaCode = false
+    return "MFA verification failed: Invalid server response"
   end
 
-  if not isMfaSuccess(mfaResponse) then
-    local data = mfaData or parseJson(mfaResponse)
-    if not data then
-      session.waitingForMfaCode = false
-      return "MFA verification failed: Invalid server response"
-    end
-    if isMfaSessionError(data) then
-      session.waitingForMfaCode = false
-      return "MFA fehlgeschlagen: Session oder CSRF ungültig (Fehler " ..
-             tostring(data.errorCode) .. "). Bitte Login abbrechen und erneut starten."
-    end
-    if data then
-      local freshCsrf = extractCsrfToken(data)
-      if freshCsrf then
-        session.csrfToken = freshCsrf
-      end
-    end
+  if data.status ~= "AUTHENTICATED" then
+    -- Unbekannte Status werden gemeldet, damit sie nicht stillschweigend verschluckt werden.
     session.waitingForMfaCode = true
-    return mfaCodeChallenge(method, "Invalid code. Please try again.")
+    return mfaCodeChallenge(method, "Code nicht akzeptiert (Status " .. tostring(data.status) .. ").")
   end
 
   session.waitingForMfaCode = false
@@ -808,15 +781,6 @@ function extractMafCookiesFromText(text)
   end
 end
 
-function isMfaSessionError(data)
-  if not data or data.errorCode == nil then
-    return false
-  end
-  local code = tostring(data.errorCode)
-  -- 10000: Session/CSRF/Request ungültig — kein OTP-Retry (verhindert Endlosschleife)
-  return code == "10000" or code == "99999" or code == "24001"
-end
-
 function trim(value)
   if not value then
     return ""
@@ -834,7 +798,9 @@ function mergeSessionCookie(name, value)
   session.cookies = session.cookies or ""
   local pattern = name .. "=[^;]*"
   if session.cookies:find(name .. "=", 1, true) then
-    session.cookies = session.cookies:gsub(pattern, name .. "=" .. value)
+    session.cookies = session.cookies:gsub(pattern, function()
+      return name .. "=" .. value
+    end)
   elseif session.cookies ~= "" then
     session.cookies = session.cookies .. "; " .. name .. "=" .. value
   else
@@ -1676,23 +1642,46 @@ function extractRftokenFromText(text)
   return text:match('[Rr][Ff]token[^%w%-_%.]*["\']?([%w%-_%.]+)["\']?')
 end
 
+PASSWORD_RESET_MESSAGE = "Der Server verlangt eine Passwort-Änderung. Bitte das Passwort im Browser bei Presidential Bank ändern und in MoneyMoney aktualisieren."
+
+function isPasswordResetRequired(updateResponse)
+  return type(updateResponse) == "string" and updateResponse:find("/app/authUpdate/resetPassword", 1, true) ~= nil
+end
+
+EMAIL_PROMPT_MESSAGE = "Der Server verlangt eine Bestätigung der E-Mail-Adresse. Bitte im Browser bei Presidential Bank bestätigen und den Login in MoneyMoney wiederholen."
+
+function isEmailPromptRequired(updateResponse)
+  return type(updateResponse) == "string" and updateResponse:find("/app/emailPrompt", 1, true) ~= nil
+end
+
 function activateOlbSession(mfaResponse, postLoginReferer)
   local homeUrl = CONSTANTS.baseUrl .. "/dbank/live/app/home"
 
   collectRftokenFromResponses(mfaResponse)
 
-  performLoginUpdate(postLoginReferer)
+  local updateResponse = performLoginUpdate(postLoginReferer)
+  if isPasswordResetRequired(updateResponse) then
+    return PASSWORD_RESET_MESSAGE
+  end
+  if isEmailPromptRequired(updateResponse) then
+    return EMAIL_PROMPT_MESSAGE
+  end
 
   local homeHtml = performApiRequest("GET", homeUrl, nil, nil, postLoginReferer)
   collectRftokenFromResponses(homeHtml)
 
-  performApiRequest(
+  -- Nicht login-kritisch: Fehler werden gemeldet, der Login läuft weiter.
+  local body, contentType = buildEmptyMultipartRequest()
+  local homeConfigResponse = performApiRequest(
     "POST",
     CONSTANTS.baseUrl .. "/site-olb/live/v1/home/config",
-    "",
-    "multipart/form-data",
+    body,
+    contentType,
     homeUrl
   )
+  if not homeConfigResponse or homeConfigResponse:find('"errorCode"', 1, true) then
+    MM.printStatus("Presidential Bank: home/config fehlgeschlagen (Login läuft weiter).")
+  end
   performApiRequest(
     "GET",
     CONSTANTS.acctsApi .. "/home/config?previewExperienceId",
@@ -1736,7 +1725,10 @@ function finalizeLogin(mfaResponse)
   local homeReferer = CONSTANTS.baseUrl .. "/dbank/live/app/home"
 
   followPostLoginRedirect(mfaResponse)
-  activateOlbSession(mfaResponse, postLoginReferer)
+  local activationError = activateOlbSession(mfaResponse, postLoginReferer)
+  if activationError then
+    return activationError
+  end
 
   local authtokenContent = performApiRequest(
     "GET",
@@ -1752,7 +1744,8 @@ function finalizeLogin(mfaResponse)
     session.deviceRegisteredPrivate = true
   end
 
-  if verifySessionWithAccounts() or verifySessionWithHistory() then
+  -- History zuerst: entspricht dem Browser; accounts-Endpunkte liefern hier 403.
+  if verifySessionWithHistory() or verifySessionWithAccounts() then
     session.loginComplete = true
     persistSessionState(rawget(_G, "LocalStorage"))
     return nil
@@ -1769,42 +1762,6 @@ function finalizeLogin(mfaResponse)
   end
 
   return "Login fehlgeschlagen: Sitzung konnte nach MFA nicht aktiviert werden."
-end
-
-function findTotpId()
-  if not session.mfaMethods then
-    return nil
-  end
-  for _, m in ipairs(session.mfaMethods) do
-    if m.type == "totp" then
-      return m.id
-    end
-  end
-  return nil
-end
-
-function isMfaSuccess(response)
-  local data = parseJson(response)
-  if not data then
-    return false
-  end
-
-  if data.errorCode then
-    return false
-  end
-
-  if data.targetView == "success" or data.targetView == "redirect" then
-    return true
-  end
-
-  if data.result then
-    local result = parseJson(data.result)
-    if result and result.success == "success" then
-      return true
-    end
-  end
-
-  return false
 end
 
 function ListAccounts(knownAccounts)
@@ -1908,6 +1865,7 @@ function parseAccounts(accountsResponse)
       bankCode = CONSTANTS.bankCode,
       currency = "USD",
       type = accountType,
+      attributes = {"statements"},
       _internalId = acc.id,
       _balance = balance
     })
@@ -2166,72 +2124,11 @@ function loginWithImportedCookies(cookieString)
   return "Cookie import failed (403 Forbidden). The bank rejected the cookies. This is likely due to: (1) IP address binding - cookies only work from same IP as browser, (2) Cloudflare security checks, or (3) Session already expired."
 end
 
-function handleCookieImportStep(credentials)
-  local cookieString = credentials[1]
-
-  if not cookieString or cookieString == "" then
-    session.waitingForCookieImport = nil
-    return "Cookie import cancelled. Please try again with valid cookies from your browser."
-  end
-
-  cookieString = cookieString:gsub("^COOKIE:", "")
-
-  local formattedCookies = cookieString:gsub("^%s*(.-)%s*$", "%1")
-
-  if not formattedCookies:match("rftoken=") then
-    return {
-      title = "Cookie Import Required",
-      challenge = "Cookie string must include rftoken. Please copy the COMPLETE Cookie header from your browser (including SESSION_TOKEN and rftoken).",
-      label = "Cookie string"
-    }
-  end
-
-  session.rftoken = formattedCookies:match("rftoken=([^;]+)")
-  session.cookies = formattedCookies
-  session.cookieImportMode = true
-  session.waitingForCookieImport = nil
-
-  local testUrl = CONSTANTS.acctsApi .. "/history?allowAccountsCall=true&getExportAccountNums=true&getxuseraccts&locationId&pageId=history&transfers_display_xuser_accounts"
-  if session.rftoken then
-    testUrl = testUrl .. "&rftoken=" .. MM.urlencode(session.rftoken)
-  end
-  local testResponse = connection:request("GET", testUrl, nil, nil, buildRequestHeaders())
-
-  if testResponse and (testResponse:match("accountsresponse") or testResponse:match("otherAccounts")) then
-    return nil
-  end
-
-  local body = testResponse and testResponse:lower() or ""
-  if body:find("forbidden") or body:find("unauthorized") or body:find("\"status\"%s*:%s*40") then
-    return "Cookie import failed: Invalid or expired session. Please login to Presidential Bank in your browser again, copy fresh cookies from DevTools → Network (including SESSION_TOKEN and rftoken), and retry."
-  end
-  if body:find("internal server error") or body:find("\"status\"%s*:%s*500") then
-    session.waitingForCookieImport = true
-    return {
-      title = "Cookie Import - Server Error",
-      challenge = "The server returned an internal error. This may be temporary.\n\nPlease try again with the same cookies, or get fresh cookies from your browser:",
-      label = "Cookie string"
-    }
-  end
-
-  return "Cookie import failed. The session may be expired or the cookies are incomplete. Please login to Presidential Bank in your browser, copy fresh cookies from DevTools → Network (including SESSION_TOKEN and rftoken), and retry."
-end
-
 function hasValidSession()
   if session.loginComplete then
     return true
   end
   return session.cookies and session.cookies ~= "" and session.cookies:match("SESSION_TOKEN")
-end
-
-function buildApiHeaders(referer)
-  return withCookieHeader({
-    ["Accept"] = "application/json, text/plain, */*",
-    ["Content-Type"] = "application/json",
-    ["Origin"] = CONSTANTS.baseUrl,
-    ["Referer"] = referer or (CONSTANTS.baseUrl .. "/dbank/live/app/mfa"),
-    ["X-Requested-With"] = "XMLHttpRequest"
-  })
 end
 
 function buildRequestHeaders()
@@ -2313,6 +2210,518 @@ function parseDate(dateStr)
   return nil
 end
 
+local SCDI_BASE_URL = "https://secure2.presidential.com"
+local SCDI_STATEMENT_PAGE = SCDI_BASE_URL .. "/scdi/Statement/"
+local SCDI_SSO_URL = CONSTANTS.baseUrl
+  .. "/fmis/live/sso/usp/usp.action?app_code=DI4476-SAML_HISTORICAL_IMAGES"
+  .. "&product_code=SAML&ping=/usp-core/app/launch"
+
+local function scdiHtmlAttribute(tag, attribute)
+  local wanted = attribute:lower()
+  for name, value in tag:gmatch("([%w:_-]+)%s*=%s*\"([^\"]*)\"") do
+    if name:lower() == wanted then
+      return value
+    end
+  end
+  for name, value in tag:gmatch("([%w:_-]+)%s*=%s*'([^']*)'") do
+    if name:lower() == wanted then
+      return value
+    end
+  end
+  for name, value in tag:gmatch("([%w:_-]+)%s*=%s*([^%s>]+)") do
+    if name:lower() == wanted then
+      return value
+    end
+  end
+  return nil
+end
+
+local function scdiDecodeHtml(value)
+  return (value or "")
+    :gsub("&amp;", "&")
+    :gsub("&quot;", '"')
+    :gsub("&#x27;", "'")
+    :gsub("&#39;", "'")
+end
+
+local function stripScdiHtmlTags(fragment)
+  return (fragment or ""):gsub("<[^>]+>", " ")
+end
+
+local function assertAllowedScdiUrl(url)
+  if type(url) ~= "string" or url == "" then
+    error("Presidential Bank: SCDI-URL fehlt.")
+  end
+
+  local absolute = url
+  if url:sub(1, 1) == "/" then
+    absolute = SCDI_BASE_URL .. url
+  elseif not url:match("^https?://") then
+    absolute = SCDI_BASE_URL .. "/" .. url
+  end
+
+  if not absolute:match("^https://") then
+    error("Presidential Bank: SCDI-URL muss HTTPS verwenden.")
+  end
+
+  local host = absolute:match("^https://([^/?#]+)")
+  if host then
+    host = host:lower():gsub(":443$", "")
+  end
+  if host ~= "secure2.presidential.com" then
+    error("Presidential Bank: SCDI-Host nicht erlaubt: " .. tostring(host))
+  end
+
+  local path = absolute:match("^https://[^/?#]+(/[^?#]*)") or "/"
+  if not path:match("^/scdi/") then
+    error("Presidential Bank: SCDI-Pfad nicht erlaubt: " .. path)
+  end
+  return absolute
+end
+
+local function extractScdiInputValue(html, inputName)
+  for inputTag in html:gmatch("<input[^>]*>") do
+    local name = scdiHtmlAttribute(inputTag, "name")
+    if name == inputName then
+      return scdiDecodeHtml(scdiHtmlAttribute(inputTag, "value"))
+    end
+  end
+  return nil
+end
+
+local function parseSsoPostForm(html, description)
+  local formTag = html:match("<form[^>]*>")
+  if not formTag then
+    error("Presidential Bank: SAML-" .. description .. "-Formular fehlt.")
+  end
+
+  local action = scdiHtmlAttribute(formTag, "action")
+  if not action or action == "" then
+    error("Presidential Bank: SAML-" .. description .. "-Formular ist unvollständig.")
+  end
+
+  local fields = {}
+  for inputTag in html:gmatch("<input[^>]*>") do
+    local name = scdiHtmlAttribute(inputTag, "name")
+    if name and name ~= "" then
+      fields[name] = scdiDecodeHtml(scdiHtmlAttribute(inputTag, "value") or "")
+    end
+  end
+  if next(fields) == nil then
+    error("Presidential Bank: SAML-" .. description .. "-Formular enthält keine Daten.")
+  end
+
+  return {action = action, fields = fields}
+end
+
+local function assertAllowedSamlAction(url)
+  if type(url) ~= "string" or not url:match("^https://") then
+    error("Presidential Bank: Ungültiges SAML-Formularziel.")
+  end
+  local host = url:match("^https://([^/?#]+)")
+  local path = url:match("^https://[^/?#]+(/[^?#]*)") or "/"
+  local allowed = {
+    ["www.presidentialpcbanking.com"] = "^/fmis/live/sso/tpv/samltpv%.action$",
+    ["fmi-pfd-1.prd.ext.dracobank.com"] = "^/idp/startSSO%.ping$",
+    ["secure2.presidential.com"] = "^/scdi/SAML/AssertionConsumerService$"
+  }
+  local pattern = allowed[host and host:lower()]
+  if not pattern then
+    error("Presidential Bank: SAML-Host nicht erlaubt: " .. tostring(host))
+  end
+  if not path:match(pattern) then
+    error("Presidential Bank: SAML-Pfad nicht erlaubt: " .. path)
+  end
+  return url
+end
+
+local function encodeFormFields(fields)
+  local values = {}
+  for name, value in pairs(fields) do
+    table.insert(values, MM.urlencode(name) .. "=" .. MM.urlencode(value))
+  end
+  return table.concat(values, "&")
+end
+
+local function establishScdiSession()
+  local response, _, mimeType, _, responseHeaders = connection:request(
+    "GET",
+    SCDI_SSO_URL,
+    nil,
+    nil,
+    withCookieHeader({
+      ["Accept"] = "text/html,application/xhtml+xml",
+      ["Referer"] = CONSTANTS.baseUrl .. "/dbank/live/app/home",
+      ["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    })
+  )
+  applyResponseCookies(responseHeaders)
+  if not response or (mimeType and mimeType:lower():find("html") == nil) then
+    error("Presidential Bank: SAML-Start konnte nicht geladen werden.")
+  end
+
+  local tokenForm = parseSsoPostForm(response, "Start")
+  local tokenAction = assertAllowedSamlAction(tokenForm.action)
+  local tokenResponse, _, tokenMimeType, _, tokenHeaders = connection:request(
+    "POST",
+    tokenAction,
+    encodeFormFields(tokenForm.fields),
+    "application/x-www-form-urlencoded",
+    withCookieHeader({
+      ["Accept"] = "text/html,application/xhtml+xml",
+      ["Origin"] = CONSTANTS.baseUrl,
+      ["Referer"] = SCDI_SSO_URL,
+      ["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    })
+  )
+  applyResponseCookies(tokenHeaders)
+  if not tokenResponse or (tokenMimeType and tokenMimeType:lower():find("html") == nil) then
+    error("Presidential Bank: SAML-Token konnte nicht verarbeitet werden.")
+  end
+
+  local assertionForm = parseSsoPostForm(tokenResponse, "Assertion")
+  local assertionAction = assertAllowedSamlAction(assertionForm.action)
+  local assertionResponse, _, assertionMimeType, _, assertionHeaders = connection:request(
+    "POST",
+    assertionAction,
+    encodeFormFields(assertionForm.fields),
+    "application/x-www-form-urlencoded",
+    withCookieHeader({
+      ["Accept"] = "text/html,application/xhtml+xml",
+      ["Origin"] = CONSTANTS.baseUrl,
+      ["Referer"] = tokenAction,
+      ["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    })
+  )
+  applyResponseCookies(assertionHeaders)
+  if not assertionResponse
+      or (assertionMimeType and assertionMimeType:lower():find("html") == nil) then
+    error("Presidential Bank: SAML-Assertion konnte nicht verarbeitet werden.")
+  end
+
+  local consumerForm = parseSsoPostForm(assertionResponse, "Consumer")
+  local consumerAction = assertAllowedSamlAction(consumerForm.action)
+  local consumerResponse, _, consumerMimeType, _, consumerHeaders = connection:request(
+    "POST",
+    consumerAction,
+    encodeFormFields(consumerForm.fields),
+    "application/x-www-form-urlencoded",
+    withCookieHeader({
+      ["Accept"] = "text/html,application/xhtml+xml",
+      ["Origin"] = "https://fmi-pfd-1.prd.ext.dracobank.com",
+      ["Referer"] = assertionAction,
+      ["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+    })
+  )
+  applyResponseCookies(consumerHeaders)
+  if not consumerResponse
+      or (consumerMimeType and consumerMimeType:lower():find("html") == nil) then
+    error("Presidential Bank: SCDI-SAML-Assertion konnte nicht abgeschlossen werden.")
+  end
+end
+
+function parseScdiStatementForm(html)
+  if type(html) ~= "string" or html == "" then
+    error("Presidential Bank: SCDI-Statementseite ist leer.")
+  end
+
+  local formTag = html:match("<form[^>]*action%s*=%s*\"[^\"]+\"[^>]*>")
+    or html:match("<form[^>]*action%s*=%s*'[^']+'[^>]*>")
+  if not formTag then
+    error("Presidential Bank: SCDI-Statementformular fehlt.")
+  end
+
+  local action = scdiDecodeHtml(scdiHtmlAttribute(formTag, "action"))
+  local accountNumber = extractScdiInputValue(html, "AccountNumber")
+  local requestVerificationToken =
+    extractScdiInputValue(html, "__RequestVerificationToken")
+  if not action or action == "" or not accountNumber or accountNumber == ""
+      or not requestVerificationToken or requestVerificationToken == "" then
+    error("Presidential Bank: SCDI-Statementformular ist unvollständig.")
+  end
+
+  return {
+    action = action,
+    accountNumber = accountNumber,
+    requestVerificationToken = requestVerificationToken
+  }
+end
+
+function buildScdiStatementPostData(accountNumber, month, year, token)
+  if not accountNumber or not month or not year or not token then
+    error("Presidential Bank: SCDI-Statementdaten sind unvollständig.")
+  end
+  return "AccountNumber=" .. MM.urlencode(accountNumber)
+    .. "&drMonth=" .. MM.urlencode(month)
+    .. "&drYear=" .. MM.urlencode(year)
+    .. "&__RequestVerificationToken=" .. MM.urlencode(token)
+end
+
+local function scdiPeriodEndFromLabel(label)
+  local monthNames = {
+    january = 1, february = 2, march = 3, april = 4,
+    may = 5, june = 6, july = 7, august = 8,
+    september = 9, october = 10, november = 11, december = 12
+  }
+  local monthName, year = label:lower():match("(%a+)%s+(%d%d%d%d)")
+  local month = monthNames[monthName]
+  if month and year then
+    local firstOfNextMonth = os.time({
+      year = tonumber(year) + (month == 12 and 1 or 0),
+      month = month == 12 and 1 or month + 1,
+      day = 1
+    })
+    return os.date("%Y-%m-%d", firstOfNextMonth - 86400)
+  end
+
+  local isoDate = label:match("(%d%d%d%d%-%d%d%-%d%d)")
+  if isoDate and parseDate(isoDate) then
+    return isoDate
+  end
+  return nil
+end
+
+function parseScdiStatementResults(html, refererUrl)
+  if type(html) ~= "string" or html == "" then
+    return {}
+  end
+
+  local statements = {}
+  local seen = {}
+  for anchorTag, href, label in html:gmatch(
+      "(<a[^>]*href%s*=%s*\"([^\"]+)\"[^>]*>(.-)</a>)") do
+    local lowerHref = href:lower()
+    if lowerHref:find("pdf", 1, true)
+        or lowerHref:find("statement", 1, true)
+        or lowerHref:find("download", 1, true) then
+      local url = assertAllowedScdiUrl(scdiDecodeHtml(href))
+      local name = normalizeWhitespace(stripScdiHtmlTags(label))
+      local periodEnd = scdiPeriodEndFromLabel(name)
+      if name == "" or not periodEnd then
+        local dateAttribute = scdiHtmlAttribute(anchorTag, "data-date")
+        periodEnd = dateAttribute and scdiPeriodEndFromLabel(dateAttribute) or periodEnd
+      end
+      if name == "" or not periodEnd then
+        error("Presidential Bank: SCDI-Statement ist unvollständig.")
+      end
+      if not seen[url] then
+        seen[url] = true
+        table.insert(statements, {
+          id = url,
+          type = "Statement",
+          name = name,
+          periodEnd = periodEnd,
+          generatedDate = periodEnd,
+          formats = "PDF",
+          _referer = refererUrl
+        })
+      end
+    end
+  end
+  return statements
+end
+
+function isPdfResponse(response, mimeType)
+  return type(response) == "string" and response:sub(1, 4) == "%PDF"
+end
+
+local function scdiRequestHeaders(referer)
+  return withCookieHeader({
+    ["Accept"] = "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8",
+    ["Accept-Language"] = "en-US,en;q=0.9",
+    ["Content-Type"] = "application/x-www-form-urlencoded",
+    ["Referer"] = referer or SCDI_STATEMENT_PAGE,
+    ["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
+  })
+end
+
+local function scdiMonthsSince(since)
+  local now = os.date("*t")
+  local start = os.date("*t", since or os.time({
+    year = since and now.year or 2008,
+    month = since and now.month - 11 or 1,
+    day = 1
+  }))
+  local months = {}
+  local year, month = start.year, start.month
+  while year < now.year or (year == now.year and month <= now.month) do
+    table.insert(months, {month = month, year = year})
+    month = month + 1
+    if month > 12 then
+      month = 1
+      year = year + 1
+    end
+  end
+  return months
+end
+
+local function scdiStatementIdentifier(month, year)
+  return string.format("scdi:%04d-%02d", year, month)
+end
+
+local function buildKnownIdentifierSet(knownIdentifiers)
+  local knownSet = {}
+  if type(knownIdentifiers) ~= "table" then
+    return knownSet
+  end
+  for key, value in pairs(knownIdentifiers) do
+    if type(key) == "number" and type(value) == "string" then
+      knownSet[value] = true
+    elseif type(key) == "string" then
+      knownSet[key] = true
+    end
+  end
+  return knownSet
+end
+
+function GetAvailableStatements(account, since, knownIdentifiers)
+  if not hasValidSession() then
+    return "Presidential Bank: Keine aktive Sitzung für Statements."
+  end
+
+  establishScdiSession()
+
+  local formResponse, _, formMime = connection:request(
+    "GET",
+    SCDI_STATEMENT_PAGE,
+    nil,
+    nil,
+    scdiRequestHeaders(CONSTANTS.baseUrl .. "/dbank/live/app/home")
+  )
+  if not formResponse or (formMime and formMime:lower():find("html") == nil) then
+    return "Presidential Bank: SCDI-Statementseite konnte nicht geladen werden."
+  end
+
+  local form = parseScdiStatementForm(formResponse)
+  local postUrl = assertAllowedScdiUrl(form.action)
+  local statements = {}
+  local seen = {}
+  local knownSet = buildKnownIdentifierSet(knownIdentifiers)
+  session.statementPdfs = {}
+  local sinceDate = since and os.date("%Y-%m-%d", since) or nil
+  for _, period in ipairs(scdiMonthsSince(since)) do
+    local statementId = scdiStatementIdentifier(period.month, period.year)
+    if not knownSet[statementId] then
+      local response, _, mimeType = connection:request(
+        "POST",
+        postUrl,
+        buildScdiStatementPostData(
+          form.accountNumber,
+          period.month,
+          period.year,
+          form.requestVerificationToken
+        ),
+        "application/x-www-form-urlencoded",
+        scdiRequestHeaders(SCDI_STATEMENT_PAGE)
+      )
+      local pageStatements
+      if isPdfResponse(response, mimeType) then
+        session.statementPdfs[statementId] = response
+        local periodEnd = string.format(
+          "%04d-%02d-%02d",
+          period.year,
+          period.month,
+          os.date("*t", os.time({
+            year = period.year,
+            month = period.month + 1,
+            day = 0
+          })).day
+        )
+        pageStatements = {{
+          id = statementId,
+          type = "Statement",
+          name = os.date("%B %Y Statement", os.time({
+            year = period.year,
+            month = period.month,
+            day = 1
+          })),
+          periodEnd = periodEnd,
+          generatedDate = periodEnd,
+          formats = "PDF"
+        }}
+      else
+        pageStatements = parseScdiStatementResults(response, SCDI_STATEMENT_PAGE)
+      end
+      for _, statement in ipairs(pageStatements) do
+        if (not sinceDate or statement.periodEnd >= sinceDate) and not seen[statement.id] then
+          seen[statement.id] = true
+          statement._referer = nil
+          table.insert(statements, statement)
+        end
+      end
+    end
+  end
+  return statements
+end
+
+function GetStatement(account, statementId)
+  local url = statementId
+  if type(statementId) == "table" then
+    url = statementId.id or statementId.statementId
+  end
+  if not url or url == "" then
+    return "Presidential Bank: Statement-ID fehlt."
+  end
+  if not hasValidSession() then
+    return "Presidential Bank: Keine aktive Sitzung für Statement-Download."
+  end
+
+  if session.statementPdfs and session.statementPdfs[url] then
+    return session.statementPdfs[url]
+  end
+  url = assertAllowedScdiUrl(url)
+
+  local response, _, mimeType = connection:request(
+    "GET",
+    url,
+    nil,
+    nil,
+    scdiRequestHeaders(SCDI_STATEMENT_PAGE)
+  )
+  if isPdfResponse(response, mimeType) then
+    return response
+  end
+  return "Presidential Bank: SCDI lieferte kein PDF für das angeforderte Statement."
+end
+
+function FetchStatements(accounts, knownIdentifiers)
+  if type(accounts) ~= "table" or not accounts[1] then
+    return "Presidential Bank: Kein Konto für den Statement-Abruf übergeben."
+  end
+
+  local knownSet = buildKnownIdentifierSet(knownIdentifiers)
+  local available = GetAvailableStatements(accounts[1], nil, knownSet)
+  if type(available) ~= "table" then
+    return available
+  end
+
+  local statements = {}
+  for _, metadata in ipairs(available) do
+    if not knownSet[metadata.id] then
+      local pdf = GetStatement(accounts[1], metadata.id)
+      if type(pdf) ~= "string" or not isPdfResponse(pdf) then
+        return pdf or "Presidential Bank: Statement-Download ohne PDF."
+      end
+
+      local filename = metadata.name:gsub("[^%w%-_ ]", "") .. ".pdf"
+      table.insert(statements, {
+        pdf = pdf,
+        identifier = metadata.id,
+        name = metadata.name,
+        filename = filename,
+        creationDate = parseDate(metadata.periodEnd),
+        timezone = "America/New_York",
+        account = accounts[1]
+      })
+    end
+  end
+
+  table.sort(statements, function(left, right)
+    return left.creationDate > right.creationDate
+  end)
+  return {statements = statements}
+end
+
 function extractCsrfTokenFromCookies(cookies)
   if not cookies then
     return nil
@@ -2321,26 +2730,11 @@ function extractCsrfTokenFromCookies(cookies)
 end
 
 function EndSession()
-  local storage = rawget(_G, "LocalStorage")
-
-  if session.persistedConnection and storage and session.loginComplete then
-    persistSessionState(storage)
-    -- Connection-Userdata ist nicht serialisierbar: ohne Entfernen gehen
-    -- sessionCookies beim MoneyMoney-Neustart oft verloren (TOTP jedes Mal).
-    stripNonSerializableConnections(storage)
-    return
-  end
-
-  if session.cookies and session.cookies ~= "" and not session.persistedConnection then
-    pcall(function()
-      connection:request("GET", CONSTANTS.baseUrl .. "/dbank/live/app/logout?reason=userlogout", nil, nil, {})
-    end)
-    if storage then
-      clearPersistedSessionStorage(storage)
-    end
-  end
-
-  session = {}
+  -- MoneyMoney ruft GetAvailableStatements/GetStatement nach EndSession auf.
+  -- Die Sitzung darf deshalb hier weder abgemeldet noch verworfen werden.
+  session.waitingForMethodSelection = nil
+  session.waitingForMfaCode = nil
+  session.selectedMfaMethod = nil
 end
 
 function stripNonSerializableConnections(storage)
@@ -2357,5 +2751,3 @@ function stripNonSerializableConnections(storage)
     end
   end
 end
-
--- SIGNATURE: MCwCFCOtOtzvSpyyqAG8X2dC3oBSpkAWAhQGQibTeyv7xvZxwI5MgEhjfxJUUw==
