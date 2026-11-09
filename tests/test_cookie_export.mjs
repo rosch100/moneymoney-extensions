@@ -51,8 +51,9 @@ assert.ok(
   safariBoa.priority.includes('bm_sv'),
   'safariBoa.priority.includesBmSv',
 );
-assert.ok(
-  safariBoa.origins.includes('https://bankofamerica.com'),
+assert.equal(
+  safariBoa.origins.filter((origin) => origin === 'https://bankofamerica.com').length,
+  1,
   'safariBoa.origins.includeApexDomain',
 );
 assert.equal(
