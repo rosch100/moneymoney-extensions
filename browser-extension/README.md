@@ -21,7 +21,10 @@ Viele Session-Cookies sind für Skripte unsichtbar. Die Erweiterung liest sie
 1. `about:debugging#/runtime/this-firefox`
 2. **Temporäres Add-on laden** → `browser-extension/manifest.json`
 
-### Safari (macOS) — empfohlen: DMG
+### Safari (macOS 26 oder neuer)
+
+Die Safari-Erweiterung setzt **macOS 26** (Safari 26) voraus. Ältere Safari-Versionen
+liefern die Cookies der laufenden Sitzung nicht über die Cookie-Schnittstelle.
 
 1. [MoneyMoney Helper 0.9 DMG](https://github.com/rosch100/moneymoney-extensions/releases/tag/v0.9) laden und öffnen
 2. **MoneyMoney Helper.app** nach Programme ziehen und einmal starten
@@ -40,7 +43,8 @@ Voraussetzung: **Xcode** (nicht nur Command Line Tools).
 4. Safari → Erweiterungen → MoneyMoney Helper aktivieren
 
 Unter **macOS 26 und neuer:** **„Websites bearbeiten“** nicht öffnen (Safari-Bug);
-Zugriff über die Safari-Toolbar auf der Bank-Seite.
+Zugriff über die Safari-Toolbar auf der Bank-Seite. Nach dem Update die
+Website-Freigabe für `bankofamerica.com` in der Toolbar erneut erteilen.
 
 ## Nutzung
 
@@ -51,6 +55,10 @@ Presidential Bank und Shareview: Cookies manuell oder über den Hub (HAR).
 2. Kontoseite bzw. Vertragsübersicht öffnen
 3. Extension-Icon → **Cookies kopieren**
 4. In MoneyMoney als Passwort einfügen (`COOKIE:…`)
+
+Kopiert wird immer der vollständige Satz der im Browser verfügbaren Cookies.
+Fehlt ein Cookie, wird der Export nicht blockiert; das Popup nennt die fehlenden
+Namen nur als Hinweis.
 
 Gemeinsamer Ablauf und HAR-Alternative:
 [Hub — Cookie-Import](https://github.com/rosch100/moneymoney-extensions#cookie-import-beta-extensions).
