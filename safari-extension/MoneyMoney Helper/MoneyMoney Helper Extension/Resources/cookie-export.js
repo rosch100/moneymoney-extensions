@@ -89,23 +89,23 @@ export function missingCritical(cookies, bank) {
   );
 }
 
-/** @typedef {'permission' | 'empty' | 'missing' | 'partial'} ExportBlockReason */
+/** @typedef {'permission' | 'empty' | 'partial'} ExportBlockReason */
 
 /**
+ * Fehlende Cookies blockieren den Export nicht: Es werden immer alle
+ * verfügbaren Cookies kopiert. Nur wenn gar keine Cookies lesbar sind,
+ * ist kein sinnvoller Export möglich.
+ *
  * @param {CookieEntry[]} cookies
- * @param {string[]} missing
  * @param {string[]} failedOrigins
  * @returns {ExportBlockReason | null}
  */
-export function exportBlockReason(cookies, missing, failedOrigins) {
+export function exportBlockReason(cookies, failedOrigins) {
   if (failedOrigins.length > 0 && cookies.length === 0) {
     return 'permission';
   }
   if (cookies.length === 0) {
     return 'empty';
-  }
-  if (missing.length > 0) {
-    return 'missing';
   }
   if (failedOrigins.length > 0) {
     return 'partial';
@@ -141,17 +141,56 @@ export function buildHint(bank, missing, tabHost) {
  */
 
 /**
+ * Ermittelt die Cookie-Speicher, die abgefragt werden müssen.
+ *
+ * Safari (ab macOS 26) legt die Cookies der laufenden Sitzung in einem
+ * eigenen Store ab. Ohne storeId liefert cookies.getAll dort eine leere
+ * Liste. Abgefragt wird deshalb der Store des aktiven Tabs.
+ *
+ * @param {import('./config.js').browserApi} api
+ * @param {number | undefined} tabId
+ * @returns {Promise<string[]>}
+ */
+async function resolveCookieStoreIds(api, tabId) {
+  const stores = await api.cookies.getAllCookieStores();
+  const activeStores = typeof tabId === 'number'
+    ? stores.filter((store) => store.tabIds?.includes(tabId))
+    : [];
+  const selected = activeStores.length > 0 ? activeStores : stores;
+  const storeIds = selected
+    .map((store) => store.id)
+    .filter((storeId) => typeof storeId === 'string' && storeId.length > 0);
+
+  if (storeIds.length === 0) {
+    throw new Error('Kein Cookie-Speicher gefunden');
+  }
+  return storeIds;
+}
+
+/**
  * @param {import('./config.js').browserApi} api
  * @param {BankConfig} bank
  * @param {string} [activeUrl]
+ * @param {number} [tabId]
  * @returns {Promise<CookieCollectResult>}
  */
-export async function collectCookies(api, bank, activeUrl) {
+export async function collectCookies(api, bank, activeUrl, tabId) {
   /** @type {Map<string, CookieEntry>} */
   const merged = new Map();
   /** @type {string[]} */
   const failedOrigins = [];
   const failedOriginSet = new Set();
+
+  /**
+   * @param {string} label
+   */
+  function markFailure(label) {
+    if (failedOriginSet.has(label)) {
+      return;
+    }
+    failedOriginSet.add(label);
+    failedOrigins.push(label);
+  }
 
   /**
    * @param {chrome.cookies.Cookie} item
@@ -177,31 +216,44 @@ export async function collectCookies(api, bank, activeUrl) {
     }
   }
 
+  let storeIds;
+  try {
+    storeIds = await resolveCookieStoreIds(api, tabId);
+  } catch (error) {
+    markFailure(error instanceof Error ? error.message : String(error));
+    return { cookies: [], failedOrigins };
+  }
+
   /**
-   * @param {string} origin
+   * @param {Record<string, string>} details
+   * @param {string} failureLabel
    */
   async function addQuery(details, failureLabel) {
     let queryFailed = false;
 
-    try {
-      const list = await api.cookies.getAll(details);
-      mergeList(list);
-    } catch {
-      queryFailed = true;
+    for (const storeId of storeIds) {
+      const query = { ...details, storeId };
+      try {
+        const list = await api.cookies.getAll(query);
+        mergeList(list);
+      } catch {
+        queryFailed = true;
+      }
     }
 
-    if (queryFailed && !failedOriginSet.has(failureLabel)) {
-      failedOriginSet.add(failureLabel);
-      failedOrigins.push(failureLabel);
+    if (queryFailed) {
+      markFailure(failureLabel);
     }
   }
 
+  /**
+   * @param {string} origin
+   */
   async function addFromOrigin(origin) {
     const url = `${origin}/`;
     const hostname = new URL(origin).hostname;
-    for (const details of [{ url }, { domain: hostname }]) {
-      await addQuery(details, origin);
-    }
+    await addQuery({ url }, origin);
+    await addQuery({ domain: hostname }, origin);
   }
 
   // host_permissions == origins (keine *.domain-Wildcards wegen Safari 27)
@@ -214,7 +266,7 @@ export async function collectCookies(api, bank, activeUrl) {
     try {
       active = new URL(activeUrl);
     } catch {
-      failedOrigins.push(activeUrl);
+      markFailure(activeUrl);
     }
   }
 

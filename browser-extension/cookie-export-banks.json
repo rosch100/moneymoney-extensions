@@ -24,7 +24,8 @@
     "match_host": "(?:^|\\.)bankofamerica\\.com$",
     "origins": [
       "https://secure.bankofamerica.com",
-      "https://www.bankofamerica.com"
+      "https://www.bankofamerica.com",
+      "https://bankofamerica.com"
     ],
     "session_host": "secure.bankofamerica.com",
     "critical": ["SMSESSION", "SSOTOKEN"],

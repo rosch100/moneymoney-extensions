@@ -72,15 +72,17 @@ COOKIE:name=value;name2=value2
    (bzw. in Chrome/Firefox die entpackte Erweiterung laden)
 3. Bank-Seite öffnen; Cookies kopieren; in MoneyMoney einfügen
 
-Der Helper exportiert derzeit Cookies für **Bank of America**, **Fidelity** und
-**Amazon.de**. Presidential Bank und Shareview: Cookies manuell oder per HAR
-(siehe unten).
+Die Safari-Variante setzt **macOS 26** (Safari 26) voraus. Der Helper exportiert
+derzeit Cookies für **Bank of America**, **Fidelity** und **Amazon.de** und
+kopiert dabei immer alle im Browser verfügbaren Cookies; fehlende Cookies
+blockieren den Export nicht. Presidential Bank und Shareview: Cookies manuell
+oder per HAR (siehe unten).
 
 ### 2. Export per HAR (Alternative)
 
 | Bank | Befehl | Wichtige Cookies |
 |------|--------|------------------|
-| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN`, `LSESSIONID` |
+| Bank of America | `python3 scripts/extract-boa-cookies.py export.har` | `SMSESSION`, `SSOTOKEN`, `LSESSIONID`, `bm_sv` |
 | Fidelity | `python3 scripts/extract-fidelity-cookies.py export.har` | `_abck`, `bm_sz`, `ATC`, `ET`, … |
 | Presidential Bank | `python3 scripts/extract-presidential-cookies.py export.har` | `SESSION_TOKEN`, `rftoken` |
 | Shareview | `python3 scripts/extract-shareview-cookies.py export.har` | `FedAuth` |

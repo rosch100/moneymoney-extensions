@@ -42,13 +42,18 @@ const safariBanks = parseSafariBankConfig(safariBanksRaw);
 const fidelity = banks.fidelity;
 const safariBoa = safariBanks.boa;
 
-assert.ok(
-  safariBoa.critical.includes('LSESSIONID'),
-  'safariBoa.requiredCookies.includeLSESSIONID',
+assert.deepEqual(
+  safariBoa.critical,
+  ['SMSESSION', 'SSOTOKEN'],
+  'safariBoa.critical.containsOnlySessionCookies',
 );
 assert.ok(
-  safariBoa.critical.includes('om_token'),
-  'safariBoa.requiredCookies.includeOmToken',
+  safariBoa.priority.includes('bm_sv'),
+  'safariBoa.priority.includesBmSv',
+);
+assert.ok(
+  safariBoa.origins.includes('https://bankofamerica.com'),
+  'safariBoa.origins.includeApexDomain',
 );
 assert.equal(
   detectSafariBank('bankofamerica.com', safariBanks),
@@ -61,11 +66,15 @@ assert.equal(detectBank('untrusted.fidelity.com', banks), null);
 assert.equal(detectBank('unknown.example', banks), null);
 
 assert.deepEqual(missingCritical([{ name: 'ATC', value: '1' }], fidelity), ['_abck']);
-assert.equal(exportBlockReason([{ name: 'ATC', value: '1' }], ['_abck'], []), 'missing');
-assert.equal(exportBlockReason([], fidelity.critical, ['https://digital.fidelity.com']), 'permission');
-assert.equal(exportBlockReason([{ name: 'ATC', value: '1' }, { name: '_abck', value: '2' }], [], ['https://login.fidelity.com']), 'partial');
 assert.equal(
-  exportBlockReason([{ name: 'ATC', value: '1' }, { name: '_abck', value: '2' }], [], []),
+  exportBlockReason([{ name: 'ATC', value: '1' }], []),
+  null,
+  'missingCookies.doNotBlockExport',
+);
+assert.equal(exportBlockReason([], ['https://digital.fidelity.com']), 'permission');
+assert.equal(exportBlockReason([{ name: 'ATC', value: '1' }, { name: '_abck', value: '2' }], ['https://login.fidelity.com']), 'partial');
+assert.equal(
+  exportBlockReason([{ name: 'ATC', value: '1' }, { name: '_abck', value: '2' }], []),
   null,
 );
 
@@ -75,7 +84,24 @@ assert.equal(
 );
 assert.equal(buildHint(fidelity, [], 'digital.fidelity.com'), '');
 
-const mockApi = {
+const DEFAULT_STORES = [{ id: 'persistent-1', tabIds: [1] }];
+
+/**
+ * Ergänzt eine Browser-API um Cookie-Speicher (Safari ab macOS 26 verlangt
+ * eine Abfrage mit storeId).
+ * @param {{ cookies: Record<string, unknown> }} api
+ * @param {Array<{ id: string, tabIds: number[] }>} [stores]
+ */
+function withStores(api, stores = DEFAULT_STORES) {
+  return {
+    cookies: {
+      getAllCookieStores: async () => stores,
+      ...api.cookies,
+    },
+  };
+}
+
+const mockApi = withStores({
   cookies: {
     getAll: async (details) => {
       if (
@@ -98,20 +124,20 @@ const mockApi = {
       return [];
     },
   },
-};
+});
 
 const result = await collectCookies(mockApi, fidelity);
 assert.ok(result.cookies.some((c) => c.name === 'ATC'));
 assert.ok(result.cookies.some((c) => c.name === '_abck'));
 assert.deepEqual(result.failedOrigins, []);
 
-const deniedApi = {
+const deniedApi = withStores({
   cookies: {
     getAll: async () => {
       throw new Error('denied');
     },
   },
-};
+});
 const failResult = await collectCookies(deniedApi, {
   ...fidelity,
   origins: ['https://digital.fidelity.com'],
@@ -119,7 +145,7 @@ const failResult = await collectCookies(deniedApi, {
 assert.equal(failResult.cookies.length, 0);
 assert.deepEqual(failResult.failedOrigins, ['https://digital.fidelity.com']);
 
-const domainDeniedApi = {
+const domainDeniedApi = withStores({
   cookies: {
     getAll: async (details) => {
       if ('domain' in details) {
@@ -128,7 +154,7 @@ const domainDeniedApi = {
       return [];
     },
   },
-};
+});
 const domainFailResult = await collectCookies(domainDeniedApi, {
   ...fidelity,
   origins: ['https://digital.fidelity.com'],
@@ -136,7 +162,7 @@ const domainFailResult = await collectCookies(domainDeniedApi, {
 assert.equal(domainFailResult.cookies.length, 0);
 assert.deepEqual(domainFailResult.failedOrigins, ['https://digital.fidelity.com']);
 
-const partialDomainDeniedApi = {
+const partialDomainDeniedApi = withStores({
   cookies: {
     getAll: async (details) => {
       if ('domain' in details) {
@@ -151,7 +177,7 @@ const partialDomainDeniedApi = {
       }];
     },
   },
-};
+});
 const partialDomainFailResult = await collectCookies(partialDomainDeniedApi, {
   ...fidelity,
   origins: ['https://digital.fidelity.com'],
@@ -164,13 +190,12 @@ assert.deepEqual(
 assert.equal(
   exportBlockReason(
     partialDomainFailResult.cookies,
-    missingCritical(partialDomainFailResult.cookies, fidelity),
     partialDomainFailResult.failedOrigins,
   ),
-  'missing',
+  'partial',
 );
 
-const partialUrlDeniedApi = {
+const partialUrlDeniedApi = withStores({
   cookies: {
     getAll: async (details) => {
       if ('url' in details) {
@@ -182,7 +207,7 @@ const partialUrlDeniedApi = {
       ];
     },
   },
-};
+});
 const partialUrlFailResult = await collectCookies(partialUrlDeniedApi, {
   ...fidelity,
   origins: ['https://digital.fidelity.com'],
@@ -195,21 +220,70 @@ assert.deepEqual(
 assert.equal(
   exportBlockReason(
     partialUrlFailResult.cookies,
-    missingCritical(partialUrlFailResult.cookies, fidelity),
     partialUrlFailResult.failedOrigins,
   ),
   'partial',
 );
 
+const storeQueries = [];
+const storeApi = {
+  cookies: {
+    getAllCookieStores: async () => [
+      { id: 'persistent-1', tabIds: [] },
+      { id: 'persistent-2', tabIds: [42] },
+    ],
+    getAll: async (details) => {
+      storeQueries.push(details);
+      if (
+        details.storeId === 'persistent-2'
+        && (
+          details.url === 'https://digital.fidelity.com/'
+          || details.domain === 'digital.fidelity.com'
+        )
+      ) {
+        return [{ name: 'ATC', value: '1', domain: '.fidelity.com', path: '/' }];
+      }
+      return [];
+    },
+  },
+};
+const storeResult = await collectCookies(
+  storeApi,
+  fidelity,
+  'https://digital.fidelity.com/portfolio',
+  42,
+);
+assert.ok(storeResult.cookies.some((cookie) => cookie.name === 'ATC'));
+assert.ok(
+  storeQueries.length > 0
+    && storeQueries.every((query) => query.storeId === 'persistent-2'),
+  'storeQuery.usesActiveTabStore',
+);
+
+const noStoreApi = {
+  cookies: {
+    getAll: async () => [
+      { name: 'ATC', value: '1', domain: '.fidelity.com', path: '/' },
+    ],
+  },
+};
+const noStoreResult = await collectCookies(noStoreApi, fidelity);
+assert.equal(noStoreResult.cookies.length, 0);
+assert.equal(
+  exportBlockReason(noStoreResult.cookies, noStoreResult.failedOrigins),
+  'permission',
+  'missingCookieStoresApi.blocksExport',
+);
+
 const safariCookieQueries = [];
-const safariApi = {
+const safariApi = withStores({
   cookies: {
     getAll: async (details) => {
       safariCookieQueries.push(details);
       return [];
     },
   },
-};
+});
 await collectSafariCookies(
   safariApi,
   safariBoa,

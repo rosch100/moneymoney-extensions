@@ -50,17 +50,24 @@ async function refresh(banks) {
   }
 
   titleEl.textContent = bank.label;
-  const { cookies, failedOrigins } = await collectCookies(browserApi, bank, tab.url);
+  const { cookies, failedOrigins } = await collectCookies(
+    browserApi,
+    bank,
+    tab.url,
+    tab.id,
+  );
   currentExport = formatCookieExport(cookies, bank);
 
   const missing = missingCritical(cookies, bank);
   hintEl.textContent = buildHint(bank, missing, host);
-  const blockReason = exportBlockReason(cookies, missing, failedOrigins);
+  const blockReason = exportBlockReason(cookies, failedOrigins);
 
   if (blockReason === 'permission') {
     setStatus('Cookie-Zugriff fehlgeschlagen', 'error');
-    hintEl.textContent =
-      'Berechtigung für diese Bank-Seite fehlt oder wurde verweigert (Safari: Extension in der Toolbar erlauben).';
+    hintEl.textContent = [
+      'Berechtigung für diese Bank-Seite fehlt oder wurde verweigert (Safari: Extension in der Toolbar erlauben).',
+      ...failedOrigins,
+    ].join(' ');
     copyBtn.disabled = true;
     return;
   }
@@ -77,19 +84,15 @@ async function refresh(banks) {
       .join(' ');
   }
 
-  if (blockReason === 'missing') {
+  // Fehlende Cookies blockieren den Export nicht: Kopiert wird immer der
+  // vollständige Satz der im Browser verfügbaren Cookies.
+  if (missing.length > 0) {
     setStatus(`Fehlt: ${missing.join(', ')}`, 'warn');
-    copyBtn.disabled = true;
-    return;
-  }
-
-  if (blockReason === 'partial') {
+  } else if (blockReason === 'partial') {
     setStatus('Cookie-Zugriff unvollständig', 'warn');
-    copyBtn.disabled = true;
-    return;
+  } else {
+    setStatus(`${cookies.length} Cookies bereit`, 'ok');
   }
-
-  setStatus(`${cookies.length} Cookies bereit`, 'ok');
   copyBtn.disabled = false;
 }
 
