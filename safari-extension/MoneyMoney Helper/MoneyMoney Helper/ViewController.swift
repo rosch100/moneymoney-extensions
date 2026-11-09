@@ -11,10 +11,6 @@ import SafariServices
 import WebKit
 
 private let extensionBundleIdentifier = "com.yourCompany.MoneyMoney-Helper.Extension"
-private let safariSettingsURLs = [
-    "x-apple.systempreferences:com.apple.Safari-Settings.extension",
-    "x-apple.systempreferences:com.apple.Safari-Settings",
-]
 
 class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
@@ -22,6 +18,9 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
 
     /// True only after Main.html (with Script.js) was loaded; guards show() calls.
     private var didLoadMainUI = false
+
+    /// True, solange ein Aufruf der Safari-Einstellungen läuft; verhindert Doppelaufrufe.
+    private var isOpeningSafariSettings = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,7 +40,6 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
         guard let body = message.body as? String, body == "open-preferences" else {
             return
         }
-        // Avoid Safari 27 WebsitesPreferences crash path from showPreferencesForExtension deep-link.
         openSafariExtensionsSettings()
     }
 
@@ -94,29 +92,28 @@ class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHan
         webView.evaluateJavaScript("show(\(enabledJS), \(useSettingsJS))")
     }
 
+    /// Öffnet Safari → Einstellungen → Erweiterungen über die SafariServices-API.
+    /// Das Schema `x-apple.systempreferences:` öffnet die Systemeinstellungen und
+    /// enthält seit macOS 13 kein Safari-Pane mehr, deshalb ist es hier unzulässig.
     private func openSafariExtensionsSettings() {
-        for candidate in safariSettingsURLs {
-            guard let url = URL(string: candidate) else {
-                continue
-            }
-            if NSWorkspace.shared.open(url) {
-                NSApplication.shared.terminate(nil)
-                return
-            }
-        }
-        if #available(macOS 26, *) {
-            showSafariSettingsOpenFailed(in: webView)
+        guard !isOpeningSafariSettings else {
             return
         }
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { _ in
+        isOpeningSafariSettings = true
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { [weak self] error in
             DispatchQueue.main.async {
+                self?.isOpeningSafariSettings = false
+                if let error {
+                    self?.showSafariSettingsOpenFailed(error: error)
+                    return
+                }
                 NSApplication.shared.terminate(nil)
             }
         }
     }
 
-    private func showSafariSettingsOpenFailed(in webView: WKWebView) {
-        os_log(.error, "MoneyMoney Helper: Safari-Einstellungen per URL-Scheme nicht öffnbar")
+    private func showSafariSettingsOpenFailed(error: Error) {
+        os_log(.error, "MoneyMoney Helper: Safari-Einstellungen nicht öffnbar: %@", error.localizedDescription)
         webView.loadHTMLString(
             """
             <!DOCTYPE html><html><body style="font: -apple-system-body; margin: 2rem;">

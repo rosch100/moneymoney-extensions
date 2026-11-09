@@ -111,6 +111,7 @@ python3 tests/test_external_scripts_conformance.py
 python3 tests/test_workflow_security.py
 python3 tests/test_cookie_export_config.py
 python3 tests/test_browser_extension_manifest.py
+python3 tests/test_safari_helper_settings.py
 node tests/test_cookie_export.mjs
 ```
 
